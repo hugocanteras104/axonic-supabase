@@ -1,6 +1,3 @@
-0001_extensions_enums.sql
-Este archivo consolida todas las extensiones necesarias y las definiciones de tipos ENUM.
-Contenido (Extensiones e ENUMs):
 -- Extensiones
 create extension if not exists pgcrypto;
 create extension if not exists unaccent;
