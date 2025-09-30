@@ -1,194 +1,159 @@
--- 0004_functions_triggers.sql
--- Funciones y triggers de uso general (idempotentes)
-
--- ==========================================
--- 1) Trigger helper: actualizar updated_at
--- ==========================================
-create or replace function public.touch_updated_at()
-returns trigger
-language plpgsql
-as $$
+-- Función helper para actualizar 'updated_at'
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
 begin
-  -- Asume que la tabla tiene columna updated_at
-  new.updated_at := now();
-  return new;
-end;
-$$;
+new.updated_at := now();
+return new;
+end $$;
 
--- Triggers updated_at (solo en tablas que lo tienen)
-drop trigger if exists trg_profiles_touch_updated_at on public.profiles;
-create trigger trg_profiles_touch_updated_at
-before update on public.profiles
-for each row execute function public.touch_updated_at();
+-- Triggers para set_updated_at en tablas con columna 'updated_at'
+drop trigger if exists trg_upd_profiles on public.profiles;
+create trigger trg_upd_profiles before update on public.profiles for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_services_touch_updated_at on public.services;
-create trigger trg_services_touch_updated_at
-before update on public.services
-for each row execute function public.touch_updated_at();
+drop trigger if exists trg_upd_services on public.services;
+create trigger trg_upd_services before update on public.services for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_appointments_touch_updated_at on public.appointments;
-create trigger trg_appointments_touch_updated_at
-before update on public.appointments
-for each row execute function public.touch_updated_at();
+drop trigger if exists trg_upd_appts on public.appointments;
+create trigger trg_upd_appts before update on public.appointments for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_inventory_touch_updated_at on public.inventory;
-create trigger trg_inventory_touch_updated_at
-before update on public.inventory
-for each row execute function public.touch_updated_at();
+drop trigger if exists trg_upd_inv on public.inventory;
+create trigger trg_upd_inv before update on public.inventory for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_resources_touch_updated_at on public.resources;
-create trigger trg_resources_touch_updated_at
-before update on public.resources
-for each row execute function public.touch_updated_at();
+drop trigger if exists trg_upd_kb on public.knowledge_base;
+create trigger trg_upd_kb before update on public.knowledge_base for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_resource_blocks_touch_updated_at on public.resource_blocks;
-create trigger trg_resource_blocks_touch_updated_at
-before update on public.resource_blocks
-for each row execute function public.touch_updated_at();
+drop trigger if exists trg_upd_resources on public.resources;
+create trigger trg_upd_resources before update on public.resources for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_kb_touch_updated_at on public.knowledge_base;
-create trigger trg_kb_touch_updated_at
-before update on public.knowledge_base
-for each row execute function public.touch_updated_at();
-
--- ======================================================
--- 2) Notificaciones por cambios de estado en CITAS
---    Inserta en notifications_queue para que el orquestador (n8n) lo recoja
--- ======================================================
-create or replace function public.enqueue_appointment_status_notification()
-returns trigger
-language plpgsql
-as $$
-declare
-  v_event text;
+-- Trigger de cancelación de cita a cola de notificaciones
+create or replace function public.on_appointment_cancelled()
+returns trigger language plpgsql as $$
 begin
-  if (tg_op = 'UPDATE') and (new.status is distinct from old.status) then
-    if new.status = 'cancelled' then
-      v_event := 'appointment_cancelled';
-    elsif new.status = 'confirmed' then
-      v_event := 'appointment_confirmed';
-    else
-      -- Otros estados no generan evento
-      return new;
-    end if;
-
-    insert into public.notifications_queue(event_type, payload)
-    values(
-      v_event,
-      jsonb_build_object(
-        'appointment_id', new.id,
-        'profile_id', new.profile_id,
-        'service_id', new.service_id,
-        'previous_status', old.status,
-        'current_status', new.status,
-        'start_time', new.start_time,
-        'end_time', new.end_time,
-        'at', now()
-      )
-    );
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_appt_status_notify on public.appointments;
-create trigger trg_appt_status_notify
-after update of status on public.appointments
-for each row execute function public.enqueue_appointment_status_notification();
-
--- ======================================================
--- 3) RPC get_available_slots: huecos por día (simple)
---    - Filtra solapes con citas CONFIRMED
---    - Ventana horaria configurable (por defecto 09:00–19:00)
---    - Granularidad configurable (por defecto 30 min)
---    Nota: no tiene en cuenta el módulo de recursos (eso va en 0006).
--- ======================================================
-create or replace function public.get_available_slots(
-  p_service_id uuid,
-  p_day date,
-  p_slot_minutes int default 30,
-  p_open time without time zone default '09:00',
-  p_close time without time zone default '19:00'
+if new.status = 'cancelled' and old.status <> 'cancelled' then
+insert into public.notifications_queue (event_type, payload)
+values (
+'appointment_cancelled',
+jsonb_build_object(
+'appointment_id', new.id,
+'service_id', new.service_id,
+'start_time', new.start_time,
+'end_time', new.end_time
 )
-returns table (start_time timestamptz, end_time timestamptz)
-language sql
-stable
-as $$
-  with params as (
-    select
-      (p_day + p_open) at time zone 'UTC' as day_open_utc,
-      (p_day + p_close) at time zone 'UTC' as day_close_utc
-  ),
-  grid as (
-    select
-      generate_series(
-        (select day_open_utc from params),
-        (select day_close_utc from params) - make_interval(mins => p_slot_minutes),
-        make_interval(mins => p_slot_minutes)
-      ) as slot_start
-  ),
-  slots as (
-    select
-      g.slot_start as start_time,
-      g.slot_start + make_interval(mins => p_slot_minutes) as end_time
-    from grid g
-  ),
-  busy as (
-    select a.start_time, a.end_time
-    from public.appointments a
-    where a.status = 'confirmed'
-      and a.start_time::date = p_day
-  )
-  select s.start_time, s.end_time
-  from slots s
-  where not exists (
-    select 1
-    from busy b
-    where tstzrange(b.start_time, b.end_time, '[)') &&
-          tstzrange(s.start_time, s.end_time, '[)')
-  )
-  order by s.start_time;
-$$;
+);
+end if;
+return new;
+end $$;
 
--- ======================================================
--- 4) RPC decrement_inventory: resta stock por SKU
--- ======================================================
-create or replace function public.decrement_inventory(p_sku text, p_units int)
-returns public.inventory
+drop trigger if exists trg_on_appointment_cancelled on public.appointments;
+create trigger trg_on_appointment_cancelled after update on public.appointments for each row execute function public.on_appointment_cancelled();
+
+-- RPC: Obtener huecos disponibles (versión básica sin recursos)
+create or replace function public.get_available_slots(p_service_id uuid, p_start timestamptz, p_end timestamptz, p_step_minutes int default 15)
+returns table(slot_start timestamptz, slot_end timestamptz)
+language plpgsql stable as $$
+declare v_dur int; v_cursor timestamptz;
+begin
+select duration_minutes into v_dur from public.services where id = p_service_id;
+if v_dur is null then raise exception 'Service not found'; end if;
+if p_start >= p_end then raise exception 'Invalid window'; end if;
+v_cursor := p_start;
+while v_cursor + (v_dur || ' minutes')::interval <= p_end loop
+if not exists (select 1 from public.appointments a where a.service_id = p_service_id and a.status = 'confirmed' and tstzrange(a.start_time, a.end_time, '[)') && tstzrange(v_cursor, v_cursor + (v_dur || ' minutes')::interval, '[)')) then
+slot_start := v_cursor;
+slot_end := v_cursor + (v_dur || ' minutes')::interval;
+return next;
+end if;
+v_cursor := v_cursor + make_interval(mins => p_step_minutes);
+end loop;
+end $$;
+
+-- RPC: Decremento de inventario seguro
+create or replace function public.decrement_inventory(p_sku text, p_qty int)
+returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_row public.inventory;
+declare v_item record;
 begin
-  if p_units is null or p_units <= 0 then
-    raise exception 'p_units debe ser > 0';
-  end if;
+if p_qty is null or p_qty <= 0 then raise exception 'Quantity must be positive, got: %', p_qty; end if;
+select * into v_item from public.inventory where sku = p_sku for update;
+if not found then raise exception 'SKU % not found', p_sku; end if;
+if v_item.quantity < p_qty then raise exception 'Insufficient stock for % (have %, need %)', p_sku, v_item.quantity, p_qty; end if;
+update public.inventory set quantity = quantity - p_qty, updated_at = now() where id = v_item.id;
+end $$;
 
-  update public.inventory
-  set quantity = greatest(0, quantity - p_units),
-      updated_at = now()
-  where sku = p_sku
-  returning * into v_row;
+-- RPC: Refrescar la Vista Materializada (sin CONCURRENTLY, para transacciones)
+create or replace function public.refresh_metrics_historical()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+refresh materialized view public.metrics_historical; -- sin concurrently
+end $$;
 
-  if v_row.id is null then
-    raise exception 'SKU % no encontrado en inventory', p_sku
-      using errcode = 'NO_DATA_FOUND';
-  end if;
+-- RPCs de Recursos
+create or replace function public.get_available_slots_with_resources(p_service_id uuid, p_start timestamptz, p_end timestamptz, p_step_minutes int default 15)
+returns table(slot_start timestamptz, slot_end timestamptz, available_resources jsonb)
+language plpgsql stable as $$
+declare v_dur int; v_cursor timestamptz; v_slot_end timestamptz; v_required_resources uuid[]; v_available_resources jsonb; v_all_available boolean;
+begin
+select duration_minutes into v_dur from public.services where id = p_service_id;
+if v_dur is null then raise exception 'Service not found'; end if;
+if p_start >= p_end then raise exception 'Invalid time window'; end if;
+select array_agg(resource_id) into v_required_resources from public.service_resource_requirements where service_id = p_service_id and is_optional = false;
 
-  return v_row;
-end;
-$$;
+if v_required_resources is null or array_length(v_required_resources, 1) = 0 then
+return query select * from public.get_available_slots(p_service_id, p_start, p_end, p_step_minutes);
+return;
+end if;
 
--- ======================================================
--- 5) Permisos de funciones (GRANT/REVOKE)
---    Ajusta según tus roles de Supabase (anon/authenticated/service_role)
--- ======================================================
-revoke all on function public.get_available_slots(uuid, date, int, time without time zone, time without time zone) from public;
-revoke all on function public.decrement_inventory(text, int) from public;
+v_cursor := p_start;
+while v_cursor + (v_dur || ' minutes')::interval <= p_end loop
+v_slot_end := v_cursor + (v_dur || ' minutes')::interval;
+v_all_available := true;
+v_available_resources := '[]'::jsonb;
+for i in 1..array_length(v_required_resources, 1) loop
+if exists (select 1 from public.resource_blocks rb where rb.resource_id = v_required_resources[i] and tstzrange(rb.start_time, rb.end_time, '[)') && tstzrange(v_cursor, v_slot_end, '[)'))
+or exists (select 1 from public.appointment_resources ar join public.appointments a on a.id = ar.appointment_id where ar.resource_id = v_required_resources[i] and a.status = 'confirmed' and tstzrange(a.start_time, a.end_time, '[)') && tstzrange(v_cursor, v_slot_end, '[)')) then
+v_all_available := false;
+exit;
+else
+select v_available_resources || jsonb_build_object('resource_id', r.id, 'name', r.name, 'type', r.type) into v_available_resources from public.resources r where r.id = v_required_resources[i];
+end if;
+end loop;
 
-grant execute on function public.get_available_slots(uuid, date, int, time without time zone, time without time zone) to authenticated;
-grant execute on function public.decrement_inventory(text, int) to authenticated;
+if v_all_available then
+slot_start := v_cursor;
+slot_end := v_slot_end;
+available_resources := v_available_resources;
+return next;
+end if;
+v_cursor := v_cursor + make_interval(mins => p_step_minutes);
+end loop;
+end $$;
 
--- Fin 0004
+create or replace function public.confirm_appointment_with_resources(p_appointment_id uuid, p_strategy text default 'first_available')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_appointment record; v_required record; v_assigned_resources jsonb := '[]'::jsonb;
+begin
+select * into v_appointment from public.appointments where id = p_appointment_id for update;
+if not found then raise exception 'Appointment not found'; end if;
+if v_appointment.status = 'confirmed' then raise exception 'Appointment already confirmed'; end if;
+
+for v_required in select srr.resource_id, srr.quantity, r.name, r.type from public.service_resource_requirements srr join public.resources r on r.id = srr.resource_id where srr.service_id = v_appointment.service_id and srr.is_optional = false loop
+
+if exists (select 1 from public.resource_blocks rb where rb.resource_id = v_required.resource_id and tstzrange(rb.start_time, rb.end_time, '[)') && tstzrange(v_appointment.start_time, v_appointment.end_time, '[)'))
+or exists (select 1 from public.appointment_resources ar join public.appointments a on a.id = ar.appointment_id where ar.resource_id = v_required.resource_id and a.status = 'confirmed' and a.id != p_appointment_id and tstzrange(a.start_time, a.end_time, '[)') && tstzrange(v_appointment.start_time, v_appointment.end_time, '[)')) then
+raise exception 'Resource % (%) is not available for the requested time slot', v_required.name, v_required.type;
+end if;
+
+insert into public.appointment_resources (appointment_id, resource_id) values (p_appointment_id, v_required.resource_id);
+v_assigned_resources := v_assigned_resources || jsonb_build_object('resource_id', v_required.resource_id, 'name', v_required.name, 'type', v_required.type);
+end loop;
+
+update public.appointments set status = 'confirmed', updated_at = now() where id = p_appointment_id;
+return jsonb_build_object('appointment_id', p_appointment_id, 'status', 'confirmed', 'assigned_resources', v_assigned_resources);
+end $$;
