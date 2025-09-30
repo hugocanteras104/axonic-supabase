@@ -1,4 +1,22 @@
--- SOLO DESARROLLO – DATOS INVENTADOS
+
+-- Esta migración solo debe ejecutarse en entornos de desarrollo o pruebas.
+-- Realizamos una verificación defensiva para evitar que se ejecute accidentalmente
+-- sobre una base de datos de producción.
+do $$
+declare
+    v_db_name text := current_database();
+    v_is_safe boolean;
+begin
+    v_is_safe := v_db_name ilike '%dev%'
+        or v_db_name ilike '%develop%'
+        or v_db_name ilike '%test%'
+        or v_db_name ilike '%local%'
+        or v_db_name ilike '%staging%';
+
+    if not v_is_safe then
+        raise exception '0099_seed_dev.sql solo puede ejecutarse en bases de datos de desarrollo/pruebas. Base de datos actual: %', v_db_name;
+    end if;
+end $$;
 
 -- Función auxiliar para generar citas de prueba
 create or replace function public.generate_test_appointments(
@@ -17,7 +35,19 @@ declare
     v_hour int;
     v_status text;
     v_counter int := 0;
+    v_db_name text := current_database();
+    v_is_safe boolean;
 begin
+    v_is_safe := v_db_name ilike '%dev%'
+        or v_db_name ilike '%develop%'
+        or v_db_name ilike '%test%'
+        or v_db_name ilike '%local%'
+        or v_db_name ilike '%staging%';
+
+    if not v_is_safe then
+        raise exception 'generate_test_appointments() solo está disponible en entornos de desarrollo/pruebas. Base de datos actual: %', v_db_name;
+    end if;
+
     -- Iterar sobre los días
     for v_date in
     select generate_series(
