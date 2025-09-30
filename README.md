@@ -1,78 +1,115 @@
-# Axonic Assistant – Supabase DB
+# Axonic Assistant 🚀
 
-Este repositorio contiene las **migraciones SQL** y **datos de prueba** que definen la base de datos de Axonic Assistant.  
-El proyecto está organizado para que sea fácil de mantener, entender y extender, tanto por humanos como por herramientas de IA (Codex, Copilot, etc.).
-
----
-
-## 🎯 Intención del proyecto
-- Proveer un esquema de base de datos **versionado** y **idempotente**.
-- Dar soporte al **Modo DUAL** de Axonic Assistant:
-  - **Owner (dueño/gestor)**: acceso completo a gestión y métricas.
-  - **Lead/Cliente**: acceso limitado a citas, promociones y conocimiento.
-- Facilitar el **debugging** y la navegación en entornos remotos (Supabase web).
+**Axonic Assistant** es un agente conversacional proactivo creado por **Axonic Dynamics**.  
+No es “otro chatbot”: es un **empleado virtual** que opera nativamente en **WhatsApp**,  
+capaz de gestionar tanto la relación con clientes como la operación interna del negocio.
 
 ---
 
-## 📂 Estructura de migraciones
-supabase/
-migrations/
-0001_extensions_enums.sql -- Extensiones y ENUMs
-0002_core_tables.sql -- Tablas principales y de recursos
-0003_indexes_constraints_views.sql -- Índices, constraints y vistas de métricas
-0004_functions_triggers.sql -- Funciones genéricas y triggers
-0005_feature_kb_search.sql -- Knowledge Base (normalización, búsqueda híbrida, tracking)
-0006_policies_rls_grants.sql -- Políticas RLS y permisos
-0099_seed_dev.sql -- Seeds de desarrollo (datos inventados)
+## 🌐 Visión
 
-yaml
-Copiar código
+- **Modo DUAL**: distingue entre mensajes del **propietario** y de **clientes/leads**, aplicando lógicas diferentes en cada caso.  
+- **Agente proactivo**: no espera a que se le pregunte; detecta oportunidades (cancelaciones, cross-sell, follow-ups) y actúa.  
+- **Unificación de canal**: el dueño gestiona su negocio y los clientes reservan servicios desde el mismo chat.  
 
 ---
 
-## ⚙️ Uso en Supabase (web)
-1. Abre tu [proyecto en Supabase](https://supabase.com/dashboard).  
-2. Ve a la pestaña **SQL Editor**.  
-3. Copia el contenido de cada archivo en orden (`0001`, `0002`, … `0099`) y ejecútalo.  
-   - Si ya tenías tablas, las migraciones son **idempotentes**, no fallarán.  
-   - `0099_seed_dev.sql` es **solo para desarrollo** (datos inventados).  
-4. Verifica en la pestaña **Table editor** que las tablas y vistas se han creado correctamente.
+## 🏗️ Arquitectura Técnica
+
+| Capa                 | Tecnología                        | Rol |
+|----------------------|-----------------------------------|-----|
+| Canal Conversacional | WhatsApp Business Cloud API       | Mensajes (texto, audio, botones, plantillas) |
+| Orquestador          | **n8n** (self-hosted en VPS)      | Flujos, integraciones y enrutamiento |
+| Base de Datos        | **Supabase** (Postgres + RLS)     | Usuarios, citas, inventario, knowledge base |
+| Motor IA             | **Google Gemini 1.5 Pro**         | Comprensión de lenguaje natural, generación de respuestas |
+| Agenda               | Google Calendar API               | Disponibilidad y confirmación en tiempo real |
+| Infraestructura      | VPS + Docker + Caddy (SSL)        | Hosting, seguridad y monitoreo |
 
 ---
 
-## ⚠️ Notas importantes
+## 🧩 Modelo de Datos (Supabase)
 
-### Acceso a vistas de métricas para propietarios
-Para que un usuario autenticado pueda consultar las vistas de métricas protegidas, su JWT debe incluir la claim `user_role = 'owner'`. Gracias a las políticas RLS existentes sobre la tabla `appointments`, los leads seguirán limitados a sus propias filas aunque obtengan acceso de solo lectura a estas vistas.
-
-- `0099_seed_dev.sql` contiene **datos de ejemplo** para pruebas.  
-  **No lo uses en producción**.  
-- Las migraciones están diseñadas para ser **idempotentes**:  
-  puedes ejecutarlas varias veces sin que fallen.  
-- La Knowledge Base incluye:
-  - **Normalización de texto** (`norm_txt`).  
-  - **Búsqueda híbrida** (similaridad + keywords).  
-  - **Tracking de popularidad** con rate-limit por usuario.
+- **profiles**: usuarios y roles (`owner`, `lead`)  
+- **appointments**: citas vinculadas a Google Calendar  
+- **services**: catálogo de tratamientos  
+- **inventory**: productos, stock y precios  
+- **knowledge_base**: FAQs y contenido dinámico  
+- **cross_sell_rules**: reglas de venta cruzada  
+- **waitlists**: lista de espera para reubicar cancelaciones  
+- **audit_logs**: seguridad y trazabilidad  
 
 ---
 
-## 📈 Roadmap DB
-- Añadir más vistas de métricas para el **Owner Dashboard**.  
-- Ampliar políticas RLS para escenarios multi-clínica.  
-- Integrar logs más detallados en `audit_logs`.  
-- Extender seeds con escenarios realistas para demo.  
+## ⚙️ Flujos Clave (n8n)
+
+- **Webhook WhatsApp → Router DUAL** (cliente vs propietario)  
+- **Modo Asistente (cliente)**: reservas, FAQs, asesor de belleza IA, recordatorios  
+- **Modo Comandante (dueño)**: gestión de agenda, stock, informes, knowledge base  
+- **Optimizador Tetris**: relleno automático de huecos por cancelaciones  
+- **Cross-selling inteligente**: sugerencias contextuales en tiempo real  
 
 ---
 
-## 👥 Contribución
-- Mantén la convención de nombres: `000X_descripcion.sql`.  
-- Usa commits descriptivos:  
-  - `feat(db):` para nuevas tablas o funciones.  
-  - `fix(db):` para correcciones.  
-  - `chore(db):` para seeds o tareas menores.  
-- Si añades seeds nuevos, hazlo siempre en un archivo `0099_...`.
+## 🎯 Funcionalidades
+
+### Para Clientes
+- Reservas instantáneas vía WhatsApp.  
+- Recomendaciones personalizadas de tratamientos.  
+- Recordatorios automáticos y seguimiento post-visita.  
+- Soporte a voz/notas de audio.  
+
+### Para Dueños
+- Consultar agenda, ventas o stock con lenguaje natural.  
+- Mover/cancelar citas directamente desde WhatsApp.  
+- Recibir informes diarios de negocio.  
+- Automatización de campañas y upselling.  
 
 ---
 
-## 📝 Licencia
-Este repositorio es de uso interno para el proyecto **Axonic Assistant**.  
+## 🆚 Diferenciación frente a la competencia
+
+| Competidor      | Enfoque | Limitación principal |
+|-----------------|---------|---------------------|
+| Hubtype         | Enterprise CX | No cubre operativa interna ni modo dueño |
+| Landbot         | No-code SMB   | Requiere configurar todo manualmente |
+| WATI            | SMB WhatsApp  | Sin proactividad real ni verticalización |
+| Bewe            | Suite belleza  | Panel web, no WhatsApp nativo |
+| Podium/Birdeye  | SMB USA       | Foco en SMS, no optimizados para WhatsApp |
+
+👉 **Axonic Assistant = gestión integral + proactividad + WhatsApp nativo.**
+
+---
+
+## 📈 Métricas y KPIs
+
+- Conversión WhatsApp → citas  
+- Reducción de cancelaciones  
+- Incremento en ventas por cross-sell  
+- Tiempo medio de respuesta < 2s  
+- Uptime y latencia monitorizados  
+
+---
+
+## 🗺️ Roadmap
+
+- **Fase 1 (MVP)** – Arquitectura dual, reservas, inventario y FAQs ✅  
+- **Fase 2** – Marketing automatizado, predicción de demanda, dashboard web  
+- **Fase 3** – SaaS multi-tenant, integraciones marketplace, IA predictiva avanzada  
+
+---
+
+## 🔒 Seguridad
+
+- Cumplimiento **GDPR**  
+- Roles seguros con **RLS en Supabase**  
+- Tokens y credenciales en Vault  
+- Auditoría completa de acciones críticas  
+
+---
+
+## ✨ Lema
+
+**“Un único número de WhatsApp para hablar con tus clientes y con tu negocio.”**
+
+---
+
