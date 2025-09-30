@@ -41,6 +41,10 @@ Copiar código
 ---
 
 ## ⚠️ Notas importantes
+
+### Acceso a vistas de métricas para propietarios
+Para que un usuario autenticado pueda consultar las vistas de métricas protegidas, su JWT debe incluir la claim `user_role = 'owner'`. Gracias a las políticas RLS existentes sobre la tabla `appointments`, los leads seguirán limitados a sus propias filas aunque obtengan acceso de solo lectura a estas vistas.
+
 - `0099_seed_dev.sql` contiene **datos de ejemplo** para pruebas.  
   **No lo uses en producción**.  
 - Las migraciones están diseñadas para ser **idempotentes**:  
