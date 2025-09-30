@@ -1,6 +1,7 @@
 -- ===============================================
--- Migration: 0213_performance_indexes.sql
+-- Migration: 0216_performance_indexes.sql
 -- Purpose: Índices adicionales para mejorar rendimiento de consultas frecuentes
+-- Dependencies: 0200-0213
 -- ===============================================
 
 begin;

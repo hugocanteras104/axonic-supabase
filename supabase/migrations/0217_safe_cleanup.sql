@@ -1,7 +1,7 @@
 -- ===============================================
--- Migration: 0214_safe_cleanup.sql
+-- Migration: 0217_safe_cleanup.sql
 -- Purpose: Limpieza segura con respaldo de datos antiguos
--- Dependencies: 0205_cleanup_footprints.sql
+-- Dependencies: 0210_cleanup_footprints.sql
 -- ===============================================
 
 begin;

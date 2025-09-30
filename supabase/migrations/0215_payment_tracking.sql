@@ -1,8 +1,21 @@
 -- ===============================================
--- Migration: 0212_payment_tracking.sql
+-- Migration: 0215_payment_tracking.sql
 -- Purpose: Sistema de tracking de pagos para depósitos y servicios
--- Dependencies: 0204_add_validations_audit.sql
+-- Dependencies: 0209_add_validations_audit.sql
 -- ===============================================
+
+-- Verificar dependencias
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_name = 'appointments' and column_name = 'deposit_required'
+  ) then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: columnas de depósito\nAplicar primero: 0209_add_validations_audit.sql';
+  end if;
+  
+  raise notice '✅ Dependencias verificadas';
+end $$;
 
 begin;
 

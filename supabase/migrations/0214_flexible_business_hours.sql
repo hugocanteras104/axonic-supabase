@@ -1,8 +1,18 @@
 -- ===============================================
--- Migration: 0211_flexible_business_hours.sql
+-- Migration: 0214_flexible_business_hours.sql
 -- Purpose: Validación flexible de horarios - solo aplica al crear citas
--- Dependencies: 0208_validate_business_hours.sql
+-- Dependencies: 0208_business_settings.sql
 -- ===============================================
+
+-- Verificar dependencias
+do $$
+begin
+  if not exists (select 1 from pg_proc where proname = 'is_within_business_hours') then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función is_within_business_hours()\nAplicar primero: 0208_business_settings.sql';
+  end if;
+  
+  raise notice '✅ Dependencias verificadas';
+end $$;
 
 begin;
 

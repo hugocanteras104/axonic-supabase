@@ -1,8 +1,17 @@
 -- ===============================================
--- Migration: 0201_update_rls_multitenancy.sql
+-- Migration: 0206_update_rls_deep.sql
 -- Purpose: Actualizar políticas RLS para multitenancy
--- Dependencies: 0200_add_multitenancy.sql
+-- Dependencies: 0205_update_rls_policies.sql
 -- ===============================================
+
+-- Verificar dependencias
+do $$
+begin
+  if not exists (select 1 from pg_proc where proname = 'get_user_business_id') then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función auth.get_user_business_id()\nAplicar primero: 0205_update_rls_policies.sql';
+  end if;
+  raise notice '✅ Dependencias verificadas';
+end $$;
 
 begin;
 

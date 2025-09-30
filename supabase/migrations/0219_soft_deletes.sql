@@ -1,6 +1,7 @@
 -- ===============================================
--- Migration: 0216_soft_deletes.sql
+-- Migration: 0219_soft_deletes.sql
 -- Purpose: Implementar borrado lógico (soft delete) en tablas críticas
+-- Dependencies: 0200-0213
 -- ===============================================
 
 begin;
