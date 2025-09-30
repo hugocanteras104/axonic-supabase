@@ -1,218 +1,321 @@
--- 0005_feature_kb_search.sql
--- Funciones y estructuras para la Knowledge Base (KB)
-
--- ==========================================
--- 1) Normalización de texto
--- ==========================================
+-- 1. FUNCIÓN HELPER DE NORMALIZACIÓN
 create or replace function public.norm_txt(p text)
 returns text
 language sql
 immutable
 as $$
-  select lower(regexp_replace(unaccent(coalesce(p,'')), '\s+', ' ', 'g'))
+select lower(regexp_replace(unaccent(coalesce(p,'')), '\s+', ' ', 'g'))
 $$;
+comment on function public.norm_txt is 'Normaliza texto: minúsculas, sin acentos, espacios colapsados';
 
--- ==========================================
--- 2) Columnas derivadas y métricas de KB
--- ==========================================
+-- 2. COLUMNAS GENERADAS Y TRACKING DE VISTAS
+-- Se asume que la tabla knowledge_base ya existe desde 0002.
+-- Se eliminan las definiciones obsoletas de question_normalized si existen.
+alter table public.knowledge_base drop column if exists question_normalized;
 alter table public.knowledge_base
-  add column if not exists question_normalized text;
-
-alter table public.knowledge_base
-  add column if not exists answer_normalized text
-  generated always as (public.norm_txt(answer)) stored;
+add column if not exists question_normalized text;
 
 alter table public.knowledge_base
-  add column if not exists view_count int not null default 0;
+add column if not exists answer_normalized text
+generated always as (public.norm_txt(answer)) stored;
 
--- Trigger para mantener question_normalized
+alter table public.knowledge_base
+add column if not exists view_count int not null default 0;
+
+-- 3. TRIGGER DE NORMALIZACIÓN y BACKFILL
 create or replace function public.kb_set_question_normalized()
-returns trigger
-language plpgsql
-as $$
+returns trigger language plpgsql as $$
 begin
-  new.question_normalized := public.norm_txt(new.question);
-  return new;
-end;
-$$;
+new.question_normalized := public.norm_txt(new.question);
+return new;
+end $$;
 
-drop trigger if exists trg_kb_question_normalized on public.knowledge_base;
-create trigger trg_kb_question_normalized
+drop trigger if exists trg_kb_norm on public.knowledge_base;
+create trigger trg_kb_norm
 before insert or update of question on public.knowledge_base
 for each row execute function public.kb_set_question_normalized();
 
--- Backfill inicial
+-- Backfill de question_normalized para registros existentes
 update public.knowledge_base
 set question_normalized = public.norm_txt(question)
-where question_normalized is null;
+where question_normalized is distinct from public.norm_txt(question);
 
--- ==========================================
--- 3) Índices de búsqueda
--- ==========================================
+-- Asegurar que question_normalized es NOT NULL y UNIQUE
+alter table public.knowledge_base
+alter column question_normalized set not null;
+
+do $$
+begin
+if not exists (
+select 1 from pg_constraint
+where conrelid = 'public.knowledge_base'::regclass
+and conname = 'knowledge_base_question_key'
+) then
+alter table public.knowledge_base
+add constraint knowledge_base_question_key unique (question_normalized);
+end if;
+end $$;
+
+
+-- 4. ÍNDICES AVANZADOS (TRGM y view_count)
 create index if not exists idx_kb_qnorm_trgm
-  on public.knowledge_base using gin (question_normalized gin_trgm_ops);
+on public.knowledge_base using gin (question_normalized gin_trgm_ops);
 
-create index if not exists idx_kb_anorm_trgm
-  on public.knowledge_base using gin (answer_normalized gin_trgm_ops);
+create index if not exists idx_kb_answer_trgm
+on public.knowledge_base using gin (answer_normalized gin_trgm_ops);
 
 create index if not exists idx_kb_view_count
-  on public.knowledge_base(view_count);
+on public.knowledge_base(view_count desc);
 
--- ==========================================
--- 4) Funciones de búsqueda
--- ==========================================
+-- Se eliminan los índices TRGM sobre la columna original 'question' si existen.
+drop index if exists idx_kb_question_trgm;
 
--- Búsqueda por similitud en question_normalized
-create or replace function public.search_knowledge_base(p_query text, p_limit int default 5)
-returns table (id uuid, question text, answer text, similarity real)
-language sql
-stable
-as $$
-  select k.id, k.question, k.answer,
-         similarity(public.norm_txt(p_query), k.question_normalized) as sim
-  from public.knowledge_base k
-  where k.question_normalized % public.norm_txt(p_query)
-  order by sim desc
-  limit p_limit;
-$$;
+-- 5. FUNCIONES DE BÚSQUEDA
 
--- Búsqueda por keywords en answer_normalized
-create or replace function public.search_knowledge_by_keywords(p_keywords text[], p_limit int default 5)
-returns table (id uuid, question text, answer text, matched_keywords int)
-language sql
-stable
-as $$
-  select k.id, k.question, k.answer,
-         cardinality(array(
-           select unnest(p_keywords)
-           intersect
-           select unnest(string_to_array(k.answer_normalized,' '))
-         )) as matched_keywords
-  from public.knowledge_base k
-  order by matched_keywords desc
-  limit p_limit;
-$$;
-
--- Búsqueda híbrida (CORREGIDA)
-create or replace function public.search_knowledge_hybrid(
-  p_query text,
-  p_keywords text[] default '{}',
-  p_category text default null,
-  p_limit int default 5
+-- Búsqueda por Similitud
+create or replace function public.search_knowledge_base(
+    p_query text,
+    p_similarity_threshold double precision default 0.20,
+    p_limit int default 5
 )
-returns table (id uuid, question text, answer text, score real)
+returns table(id uuid, category text, question text, answer text, similarity double precision)
 language sql
 stable
 as $$
-  with base as (
-    select k.id, k.question, k.answer,
-           similarity(public.norm_txt(p_query), k.question_normalized) as sim,
-           cardinality(array(
-             select unnest(p_keywords)
-             intersect
-             select unnest(string_to_array(k.answer_normalized,' '))
-           )) as kw_count
-    from public.knowledge_base k
-    where (p_category is null or k.category = p_category)
-  )
-  select id, question, answer, (sim + (kw_count * 0.2)) as score
-  from base
-  order by score desc
-  limit p_limit;
+select
+    kb.id, kb.category, kb.question, kb.answer,
+    similarity(kb.question_normalized, public.norm_txt(p_query)) as sim
+from public.knowledge_base kb
+where similarity(kb.question_normalized, public.norm_txt(p_query)) > p_similarity_threshold
+order by sim desc
+limit p_limit
 $$;
+comment on function public.search_knowledge_base is 'Búsqueda por similitud usando pg_trgm';
 
--- Relacionar preguntas similares
-create or replace function public.get_related_questions(p_question_id uuid, p_limit int default 5)
-returns table (id uuid, question text, similarity real)
+-- Búsqueda por Keywords
+create or replace function public.search_knowledge_by_keywords(
+    p_keywords text[],
+    p_limit int default 5
+)
+returns table(id uuid, category text, question text, answer text, keyword_matches int)
 language sql
 stable
 as $$
-  select k2.id, k2.question,
-         similarity(k1.question_normalized, k2.question_normalized) as sim
-  from public.knowledge_base k1
-  join public.knowledge_base k2 on k1.id <> k2.id
-  where k1.id = p_question_id
-  order by sim desc
-  limit p_limit;
+select
+    kb.id, kb.category, kb.question, kb.answer,
+    (
+        select count(*)
+        from unnest(p_keywords) as kw
+        where kb.question_normalized ilike ('%' || public.norm_txt(kw) || '%')
+        or kb.answer_normalized ilike ('%' || public.norm_txt(kw) || '%')
+    )::int as keyword_matches
+from public.knowledge_base kb
+where exists (
+    select 1
+    from unnest(p_keywords) as kw
+    where kb.question_normalized ilike ('%' || public.norm_txt(kw) || '%')
+    or kb.answer_normalized ilike ('%' || public.norm_txt(kw) || '%')
+)
+order by keyword_matches desc, kb.id
+limit p_limit
 $$;
+comment on function public.search_knowledge_by_keywords is 'Búsqueda por palabras clave';
 
--- ==========================================
--- 5) Tracking de popularidad
--- ==========================================
+-- Búsqueda Híbrida (Versión CORREGIDA con pesos y p_category)
+drop function if exists public.search_knowledge_hybrid(text, double precision, int);
+drop function if exists public.search_knowledge_hybrid(text, double precision, int, text); -- Eliminar versiones antiguas/duplicadas
+create or replace function public.search_knowledge_hybrid(
+    p_query text,
+    p_similarity_threshold double precision default 0.15,
+    p_limit int default 5,
+    p_category text default null
+)
+returns table(id uuid, category text, question text, answer text, relevance_score double precision, match_type text)
+language plpgsql
+stable
+as $$
+declare
+    vq text;
+    v_keywords text[];
+begin
+    vq := public.norm_txt(p_query);
+    select array_agg(w) into v_keywords
+    from (
+        select word as w
+        from regexp_split_to_table(vq, '\s+') as word
+        where length(word) >= 3
+    ) q;
 
--- Huella de vistas por usuario (hash del teléfono, etc.)
+    return query
+    with base as (
+        select
+            kb.id as kb_id,
+            kb.category as kb_category,
+            kb.question as kb_question,
+            kb.answer as kb_answer,
+            kb.question_normalized as kb_question_normalized,
+            kb.answer_normalized as kb_answer_normalized
+        from public.knowledge_base kb
+        where (p_category is null or kb.category = p_category)
+    ),
+    similarity_results as (
+        select
+            b.kb_id, b.kb_category, b.kb_question, b.kb_answer,
+            similarity(b.kb_question_normalized, vq) * 100.0 as score,
+            'similarity'::text as match_type
+        from base b
+        where similarity(b.kb_question_normalized, vq) > p_similarity_threshold
+    ),
+    keyword_results as (
+        select
+            b.kb_id, b.kb_category, b.kb_question, b.kb_answer,
+            (
+                -- Pesos diferenciados: pregunta (24 pts) > respuesta (16 pts)
+                select (sum(case when b.kb_question_normalized ilike ('%' || kw || '%') then 1 else 0 end) * 24.0)
+                + (sum(case when b.kb_answer_normalized ilike ('%' || kw || '%') then 1 else 0 end) * 16.0)
+                from unnest(coalesce(v_keywords, array[]::text[])) as kw
+            ) as score,
+            'keywords'::text as match_type
+        from base b
+        where exists (
+            select 1
+            from unnest(coalesce(v_keywords, array[]::text[])) as kw
+            where b.kb_question_normalized ilike ('%' || kw || '%')
+            or b.kb_answer_normalized ilike ('%' || kw || '%')
+        )
+    ),
+    combined as (
+        select * from similarity_results
+        union all
+        select * from keyword_results
+    )
+    select
+        c.kb_id, c.kb_category, c.kb_question, c.kb_answer,
+        max(c.score) as relevance_score,
+        string_agg(distinct c.match_type, '+' order by c.match_type) as match_type
+    from combined c
+    group by c.kb_id, c.kb_category, c.kb_question, c.kb_answer
+    order by relevance_score desc
+    limit p_limit;
+end
+$$;
+comment on function public.search_knowledge_hybrid is 'Búsqueda híbrida con scoring. Pregunta 24pts, Respuesta 16pts. Soporta filtro por categoría. CORREGIDA: sin ambigüedad de columnas.';
+
+
+-- Preguntas Relacionadas
+create or replace function public.get_related_questions(
+    p_question_id uuid,
+    p_limit int default 3
+)
+returns table(id uuid, category text, question text, similarity double precision)
+language sql
+stable
+as $$
+select
+    kb2.id, kb2.category, kb2.question,
+    similarity(kb1.question_normalized, kb2.question_normalized) as sim
+from public.knowledge_base kb1
+cross join public.knowledge_base kb2
+where kb1.id = p_question_id
+and kb2.id != p_question_id
+and similarity(kb1.question_normalized, kb2.question_normalized) > 0.15
+order by sim desc
+limit p_limit
+$$;
+comment on function public.get_related_questions is 'Obtiene preguntas similares';
+
+
+-- 6. TRACKING DE POPULARIDAD
 create table if not exists public.kb_views_footprint (
-  kb_id uuid references public.knowledge_base(id) on delete cascade,
-  phone_hash text not null,
-  last_view timestamptz not null default now(),
-  primary key (kb_id, phone_hash)
+    kb_id uuid not null,
+    phone_hash text not null,
+    last_view timestamptz not null,
+    primary key (kb_id, phone_hash)
 );
+comment on table public.kb_views_footprint is 'Registro de huella de usuario/pregunta para rate-limiting de vistas KB.';
 
--- Función de incremento con rate-limit (CORREGIDA)
+-- Vista de Preguntas Populares
+create or replace view public.knowledge_popular_questions as
+select
+    id, category, question, view_count, created_at
+from public.knowledge_base
+where view_count > 0
+order by view_count desc, created_at desc
+limit 10;
+
+-- Función de incremento con rate-limit y LOCKS (Versión CORREGIDA/ROBUSTA)
 create or replace function public.increment_kb_view_count_guarded(
-  p_kb_id uuid,
-  p_phone_hash text,
-  p_cooldown_secs int default 60
+    p_question_id uuid,
+    p_phone_hash text
 )
 returns void
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
-  v_last timestamptz;
+    v_should_increment boolean := false;
+    v_last_view timestamptz;
+    v_lock_id bigint;
 begin
-  select last_view into v_last
-  from public.kb_views_footprint
-  where kb_id = p_kb_id and phone_hash = p_phone_hash;
+    -- Generar un ID de lock único basado en kb_id + phone_hash
+    v_lock_id := hashtext(p_question_id::text || p_phone_hash);
+    -- Adquirir lock advisory (bloquea otras sesiones con el mismo lock_id)
+    perform pg_advisory_xact_lock(v_lock_id);
 
-  if v_last is null or v_last < now() - make_interval(secs => p_cooldown_secs) then
+    -- Consultar el último registro de visualización
+    select last_view into v_last_view
+    from public.kb_views_footprint
+    where kb_id = p_question_id and phone_hash = p_phone_hash;
+
+    -- Determinar si incrementar ANTES de modificar last_view
+    if v_last_view is null then
+        v_should_increment := true;
+    elsif now() - v_last_view > interval '60 seconds' then
+        v_should_increment := true;
+    end if;
+
+    -- Actualizamos o insertamos el registro de visualización
     insert into public.kb_views_footprint(kb_id, phone_hash, last_view)
-    values (p_kb_id, p_phone_hash, now())
-    on conflict (kb_id, phone_hash) do update
-      set last_view = excluded.last_view;
+    values (p_question_id, p_phone_hash, now())
+    on conflict (kb_id, phone_hash)
+    do update set last_view = now();
 
-    update public.knowledge_base
-    set view_count = view_count + 1
-    where id = p_kb_id;
-  end if;
-end;
+    -- Si determinamos que debemos incrementar, lo hacemos
+    if v_should_increment then
+        update public.knowledge_base
+        set view_count = view_count + 1
+        where id = p_question_id;
+    end if;
+end $$;
+comment on function public.increment_kb_view_count_guarded is 'Incrementa view_count con rate-limiting (60s). Usa advisory locks para prevenir race conditions. CORREGIDA: evalúa condición ANTES de actualizar last_view.';
+
+-- Función simple (sin rate-limit, para desarrollo/debug)
+create or replace function public.increment_kb_view_count(p_question_id uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+update public.knowledge_base
+set view_count = view_count + 1
+where id = p_question_id
 $$;
+comment on function public.increment_kb_view_count is 'Incrementa view_count (sin rate-limit)';
 
--- Vista de preguntas más vistas
-create or replace view public.knowledge_popular_questions as
-select id, question, answer, view_count
-from public.knowledge_base
-order by view_count desc
-limit 20;
 
--- ==========================================
--- 6) Tabla de sugerencias de usuarios
--- ==========================================
+-- 7. TABLA DE SUGERENCIAS
 create table if not exists public.knowledge_suggestions (
-  id uuid primary key default gen_random_uuid(),
-  profile_id uuid references public.profiles(id) on delete cascade,
-  question text not null,
-  suggested_answer text,
-  status text check (status in ('pending','approved','rejected')) default 'pending',
-  created_at timestamptz default now(),
-  reviewed_at timestamptz
+    id uuid primary key default gen_random_uuid(),
+    profile_id uuid references public.profiles(id) on delete set null,
+    suggested_question text not null,
+    context text,
+    status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+    created_at timestamptz not null default now(),
+    reviewed_at timestamptz,
+    reviewed_by uuid references public.profiles(id)
 );
+comment on table public.knowledge_suggestions is 'Sugerencias de usuarios para ampliar KB';
 
-create index if not exists idx_ksuggestions_status on public.knowledge_suggestions(status);
-create index if not exists idx_ksuggestions_created_at on public.knowledge_suggestions(created_at);
-
--- ==========================================
--- 7) Permisos de funciones
--- ==========================================
-revoke all on function public.search_knowledge_base(text, int) from public;
-revoke all on function public.search_knowledge_by_keywords(text[], int) from public;
-revoke all on function public.search_knowledge_hybrid(text, text[], text, int) from public;
-revoke all on function public.get_related_questions(uuid, int) from public;
-revoke all on function public.increment_kb_view_count_guarded(uuid, text, int) from public;
-
-grant execute on function public.search_knowledge_base(text, int) to authenticated;
-grant execute on function public.search_knowledge_by_keywords(text[], int) to authenticated;
-grant execute on function public.search_knowledge_hybrid(text, text[], text, int) to authenticated;
-grant execute on function public.get_related_questions(uuid, int) to authenticated;
-grant execute on function public.increment_kb_view_count_guarded(uuid, text, int) to authenticated;
-
--- Fin 0005
+create index if not exists idx_ks_status on public.knowledge_suggestions(status);
+create index if not exists idx_ks_created on public.knowledge_suggestions(created_at desc);
