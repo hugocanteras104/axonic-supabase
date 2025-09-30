@@ -1,6 +1,3 @@
--- 0003_indexes_constraints_views.sql
--- Índices, constraints y vistas de métricas
-
 -- APPOINTMENTS - Índices de rendimiento
 create index if not exists idx_appts_profile_id on public.appointments(profile_id);
 create index if not exists idx_appts_service_id on public.appointments(service_id);
@@ -184,5 +181,3 @@ create index if not exists idx_rb_resource_range on public.resource_blocks(resou
 -- Constraints de unicidad para recursos
 do $$ begin if not exists (select 1 from pg_constraint where conrelid = 'public.service_resource_requirements'::regclass and conname = 'srr_unique_service_resource') then alter table public.service_resource_requirements add constraint srr_unique_service_resource unique (service_id, resource_id); end if; end $$;
 do $$ begin if not exists (select 1 from pg_constraint where conrelid = 'public.appointment_resources'::regclass and conname = 'ar_unique_appointment_resource') then alter table public.appointment_resources add constraint ar_unique_appointment_resource unique (appointment_id, resource_id); end if; end $$;
-
--- Fin 0003
