@@ -21,7 +21,7 @@ capaz de gestionar tanto la relación con clientes como la operación interna de
 | Canal Conversacional | WhatsApp Business Cloud API       | Mensajes (texto, audio, botones, plantillas) |
 | Orquestador          | **n8n** (self-hosted en VPS)      | Flujos, integraciones y enrutamiento |
 | Base de Datos        | **Supabase** (Postgres + RLS)     | Usuarios, citas, inventario, knowledge base |
-| Motor IA             | **Google Gemini 1.5 Pro**         | Comprensión de lenguaje natural, generación de respuestas |
+| Motor IA             | **Google Gemini 2.5 Pro**         | Comprensión de lenguaje natural, generación de respuestas y planes de acción |
 | Agenda               | Google Calendar API               | Disponibilidad y confirmación en tiempo real |
 | Infraestructura      | VPS + Docker + Caddy (SSL)        | Hosting, seguridad y monitoreo |
 
@@ -112,4 +112,3 @@ capaz de gestionar tanto la relación con clientes como la operación interna de
 **“Un único número de WhatsApp para hablar con tus clientes y con tu negocio.”**
 
 ---
-
