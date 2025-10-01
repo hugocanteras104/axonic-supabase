@@ -20,7 +20,6 @@ begin
   
   get diagnostics v_count = row_count;
   
-  raise notice 'Cleanup: % registros borrados de kb_views_footprint', v_count;
   
   return query select v_count;
 end $$;
@@ -28,11 +27,9 @@ end $$;
 comment on function public.cleanup_old_footprints is
   'Borra registros de visualizaciones de KB más antiguos de 2 años. Retorna cantidad de registros eliminados.';
 
-raise notice 'Función cleanup_old_footprints creada';
 
 create extension if not exists pg_cron;
 
-raise notice 'Extensión pg_cron verificada';
 
 do $$
 begin
@@ -48,7 +45,6 @@ select cron.schedule(
   'select public.cleanup_old_footprints()'
 );
 
-raise notice 'Limpieza automática programada: día 1 de cada mes a las 2 AM';
 
 create or replace function public.check_scheduled_jobs()
 returns table(
@@ -80,7 +76,6 @@ $$;
 comment on function public.check_scheduled_jobs is
   'Lista todos los jobs programados con pg_cron';
 
-raise notice 'Función check_scheduled_jobs creada';
 
 create or replace function public.check_job_history(p_limit int default 20)
 returns table(
@@ -112,19 +107,6 @@ $$;
 comment on function public.check_job_history is
   'Muestra el historial de ejecuciones de jobs programados';
 
-raise notice 'Función check_job_history creada';
 
 commit;
 
-raise notice '========================================';
-raise notice 'Migración 0205_cleanup_footprints completada';
-raise notice '';
-raise notice 'Para verificar el job programado, ejecuta:';
-raise notice '  select * from public.check_scheduled_jobs();';
-raise notice '';
-raise notice 'Para ver historial de ejecuciones:';
-raise notice '  select * from public.check_job_history();';
-raise notice '';
-raise notice 'Para ejecutar limpieza manualmente:';
-raise notice '  select public.cleanup_old_footprints();';
-raise notice '========================================';

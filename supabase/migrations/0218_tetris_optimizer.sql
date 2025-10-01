@@ -278,11 +278,6 @@ begin
         )
       );
       
-      raise notice 'Optimización Tetris creada: % candidatos encontrados para hueco %-%', 
-        jsonb_array_length(v_opportunities), new.start_time, new.end_time;
-    else
-      raise notice 'No se encontraron candidatos para optimización Tetris del hueco %-%',
-        new.start_time, new.end_time;
     end if;
     
   end if;
@@ -523,18 +518,3 @@ grant select on public.tetris_optimization_stats to authenticated;
 
 commit;
 
-raise notice '========================================';
-raise notice 'Sistema Tetris Optimizer implementado con éxito!';
-raise notice '';
-raise notice 'Funcionalidades:';
-raise notice '1. Detecta cancelaciones automáticamente';
-raise notice '2. Busca citas futuras que pueden adelantarse';
-raise notice '3. Notifica a lista de espera';
-raise notice '4. Prioriza candidatos inteligentemente';
-raise notice '';
-raise notice 'Para procesar optimizaciones manualmente:';
-raise notice '  select public.process_tetris_optimization(optimization_id);';
-raise notice '';
-raise notice 'Para ver estadísticas:';
-raise notice '  select * from public.tetris_optimization_stats;';
-raise notice '========================================';

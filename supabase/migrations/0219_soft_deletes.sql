@@ -203,10 +203,3 @@ order by day desc;
 
 commit;
 
-raise notice '========================================';
-raise notice 'Soft Deletes implementado';
-raise notice '';
-raise notice 'Uso:';
-raise notice '  Eliminar: select public.soft_delete(''appointments'', uuid, ''razón'');';
-raise notice '  Restaurar: select public.restore_deleted(''appointments'', uuid);';
-raise notice '========================================';

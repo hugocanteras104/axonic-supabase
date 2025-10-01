@@ -88,7 +88,6 @@ begin
 end;
 $$;
 
-raise notice 'Función get_available_slots actualizada';
 
 -- ===============================================
 -- get_available_slots_with_resources (CORREGIDA)
@@ -218,7 +217,6 @@ begin
 end;
 $$;
 
-raise notice 'Función get_available_slots_with_resources actualizada (CORREGIDA)';
 
 -- ===============================================
 -- confirm_appointment_with_resources
@@ -321,7 +319,6 @@ begin
     );
 end $$;
 
-raise notice 'Función confirm_appointment_with_resources actualizada';
 
 -- ===============================================
 -- decrement_inventory
@@ -369,7 +366,6 @@ begin
     where id = v_item.id;
 end $$;
 
-raise notice 'Función decrement_inventory actualizada';
 
 -- ===============================================
 -- refresh_metrics_historical
@@ -384,7 +380,6 @@ begin
     refresh materialized view public.metrics_historical;
 end $$;
 
-raise notice 'Función refresh_metrics_historical mantiene su implementación';
 
 -- ===============================================
 -- Funciones de KB (Knowledge Base)
@@ -409,7 +404,6 @@ order by sim desc
 limit p_limit
 $$;
 
-raise notice 'Función search_knowledge_base actualizada';
 
 create or replace function public.search_knowledge_by_keywords(
     p_keywords text[],
@@ -439,7 +433,6 @@ order by keyword_matches desc, kb.id
 limit p_limit
 $$;
 
-raise notice 'Función search_knowledge_by_keywords actualizada';
 
 create or replace function public.search_knowledge_hybrid(
     p_query text,
@@ -520,7 +513,6 @@ begin
 end
 $$;
 
-raise notice 'Función search_knowledge_hybrid actualizada';
 
 create or replace function public.get_related_questions(
     p_question_id uuid,
@@ -544,7 +536,6 @@ order by sim desc
 limit p_limit
 $$;
 
-raise notice 'Función get_related_questions actualizada';
 
 create or replace function public.increment_kb_view_count_guarded(
     p_question_id uuid,
@@ -601,11 +592,6 @@ begin
     end if;
 end $$;
 
-raise notice 'Función increment_kb_view_count_guarded actualizada';
 
 commit;
 
-raise notice '========================================';
-raise notice 'Migración 0202_update_functions_multitenancy completada';
-raise notice 'Todas las funciones actualizadas con business_id';
-raise notice '========================================';

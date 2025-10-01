@@ -181,7 +181,3 @@ grant execute on function public.register_payment(uuid, numeric, text, text, tex
 
 commit;
 
-raise notice '========================================';
-raise notice 'Sistema de tracking de pagos implementado';
-raise notice 'Usar: select public.register_payment(appointment_id, 30.00, ''tarjeta'');';
-raise notice '========================================';

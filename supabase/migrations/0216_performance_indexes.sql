@@ -81,7 +81,3 @@ comment on index idx_audit_action_time is
 
 commit;
 
-raise notice '========================================';
-raise notice 'Índices de rendimiento creados';
-raise notice 'Las consultas principales serán 10-100x más rápidas';
-raise notice '========================================';
