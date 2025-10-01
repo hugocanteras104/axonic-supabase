@@ -105,6 +105,9 @@ alter table public.audit_logs
   foreign key (profile_id, business_id)
   references public.profiles(id, business_id);
 
-raise notice '✅ [5/6] Foreign keys compuestas creadas';
+do $$
+begin
+  raise notice '✅ [5/6] Foreign keys compuestas creadas';
+end $$;
 
 commit;
