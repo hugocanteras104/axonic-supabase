@@ -8,7 +8,7 @@
 do $$
 begin
   if not exists (select 1 from pg_proc where proname = 'get_user_business_id') then
-    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función auth.get_user_business_id()\nAplicar primero: 0205_update_rls_policies.sql';
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función public.get_user_business_id()\nAplicar primero: 0205_update_rls_policies.sql';
   end if;
   
   if not exists (
@@ -44,7 +44,7 @@ declare
     v_role text;
     v_business_id uuid;
 begin
-    v_business_id := auth.get_user_business_id();
+    v_business_id := public.get_user_business_id();
     v_role := auth.jwt()->>'user_role';
 
     if v_business_id is null then
@@ -117,7 +117,7 @@ declare
     v_business_id uuid;
     i int;
 begin
-    v_business_id := auth.get_user_business_id();
+    v_business_id := public.get_user_business_id();
     v_role := auth.jwt()->>'user_role';
     
     if v_business_id is null then
@@ -238,7 +238,7 @@ declare
     v_assigned_resources jsonb := '[]'::jsonb;
     v_business_id uuid;
 begin
-    v_business_id := auth.get_user_business_id();
+    v_business_id := public.get_user_business_id();
     
     if v_business_id is null then
         raise exception 'Business context not found for current user';
@@ -339,7 +339,7 @@ declare
     v_item record;
     v_business_id uuid;
 begin
-    v_business_id := auth.get_user_business_id();
+    v_business_id := public.get_user_business_id();
     
     if v_business_id is null then
         raise exception 'Business context not found for current user';
@@ -403,7 +403,7 @@ select
     kb.id, kb.category, kb.question, kb.answer,
     similarity(kb.question_normalized, public.norm_txt(p_query)) as sim
 from public.knowledge_base kb
-where kb.business_id = auth.get_user_business_id()
+where kb.business_id = public.get_user_business_id()
   and similarity(kb.question_normalized, public.norm_txt(p_query)) > p_similarity_threshold
 order by sim desc
 limit p_limit
@@ -428,7 +428,7 @@ select
            or kb.answer_normalized ilike ('%' || public.norm_txt(kw) || '%')
     )::int as keyword_matches
 from public.knowledge_base kb
-where kb.business_id = auth.get_user_business_id()
+where kb.business_id = public.get_user_business_id()
   and exists (
     select 1
     from unnest(p_keywords) as kw
@@ -456,7 +456,7 @@ declare
     v_keywords text[];
     v_business_id uuid;
 begin
-    v_business_id := auth.get_user_business_id();
+    v_business_id := public.get_user_business_id();
     vq := public.norm_txt(p_query);
     
     select array_agg(w) into v_keywords
@@ -537,8 +537,8 @@ from public.knowledge_base kb1
 cross join public.knowledge_base kb2
 where kb1.id = p_question_id
   and kb2.id != p_question_id
-  and kb1.business_id = auth.get_user_business_id()
-  and kb2.business_id = auth.get_user_business_id()
+  and kb1.business_id = public.get_user_business_id()
+  and kb2.business_id = public.get_user_business_id()
   and similarity(kb1.question_normalized, kb2.question_normalized) > 0.15
 order by sim desc
 limit p_limit
@@ -561,7 +561,7 @@ declare
     v_lock_id bigint;
     v_business_id uuid;
 begin
-    v_business_id := auth.get_user_business_id();
+    v_business_id := public.get_user_business_id();
     
     if v_business_id is null then
         raise exception 'Business context not found for current user';

@@ -12,7 +12,7 @@ begin
   end if;
   
   if not exists (select 1 from pg_proc where proname = 'get_user_business_id') then
-    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función auth.get_user_business_id()\nAplicar primero: 0205_update_rls_policies.sql';
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función public.get_user_business_id()\nAplicar primero: 0205_update_rls_policies.sql';
   end if;
   
   raise notice '✅ Dependencias verificadas';
@@ -58,18 +58,18 @@ alter table public.business_settings enable row level security;
 drop policy if exists bs_read on public.business_settings;
 create policy bs_read on public.business_settings
   for select to authenticated
-  using (business_id = auth.get_user_business_id());
+  using (business_id = public.get_user_business_id());
 
 drop policy if exists bs_owner_write on public.business_settings;
 create policy bs_owner_write on public.business_settings
   for all to authenticated
   using (
     auth.jwt()->>'user_role' = 'owner'
-    and business_id = auth.get_user_business_id()
+    and business_id = public.get_user_business_id()
   )
   with check (
     auth.jwt()->>'user_role' = 'owner'
-    and business_id = auth.get_user_business_id()
+    and business_id = public.get_user_business_id()
   );
 
 raise notice 'RLS configurado para business_settings';
@@ -150,7 +150,7 @@ set search_path = public
 as $$
   select setting_value
   from public.business_settings
-  where business_id = auth.get_user_business_id()
+  where business_id = public.get_user_business_id()
     and setting_key = p_setting_key
   limit 1
 $$;

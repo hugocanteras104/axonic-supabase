@@ -73,11 +73,11 @@ create policy optimizations_owner_all on public.agenda_optimizations
   for all to authenticated
   using (
     auth.jwt()->>'user_role' = 'owner'
-    and business_id = auth.get_user_business_id()
+    and business_id = public.get_user_business_id()
   )
   with check (
     auth.jwt()->>'user_role' = 'owner'
-    and business_id = auth.get_user_business_id()
+    and business_id = public.get_user_business_id()
   );
 
 -- ===================================================
@@ -320,7 +320,7 @@ declare
   v_duration interval;
   v_business_id uuid;
 begin
-  v_business_id := auth.get_user_business_id();
+  v_business_id := public.get_user_business_id();
   
   -- Obtener cita actual
   select * into v_appointment
