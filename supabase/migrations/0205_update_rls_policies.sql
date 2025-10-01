@@ -6,8 +6,8 @@
 
 begin;
 
--- Crear función helper
-create or replace function auth.get_user_business_id()
+-- Crear función helper en schema PUBLIC (no auth)
+create or replace function public.get_user_business_id()
 returns uuid
 language sql
 stable
@@ -20,7 +20,7 @@ as $$
   limit 1
 $$;
 
-comment on function auth.get_user_business_id is 
+comment on function public.get_user_business_id is 
   'Retorna el business_id del usuario autenticado actualmente';
 
 -- Habilitar RLS en businesses
@@ -29,7 +29,7 @@ alter table public.businesses enable row level security;
 drop policy if exists businesses_owner_read on public.businesses;
 create policy businesses_owner_read on public.businesses
   for select to authenticated
-  using (id = auth.get_user_business_id());
+  using (id = public.get_user_business_id());
 
 drop policy if exists businesses_admin_write on public.businesses;
 create policy businesses_admin_write on public.businesses
