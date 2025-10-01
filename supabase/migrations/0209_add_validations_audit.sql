@@ -4,6 +4,7 @@
 -- Dependencies: 0208_business_settings.sql
 -- ===============================================
 
+-- Verificar dependencias
 do $$
 begin
   if not exists (select 1 from pg_tables where tablename = 'business_settings') then
@@ -15,9 +16,7 @@ end $$;
 
 begin;
 
--- NO agregamos constraint de futuro porque tenemos datos históricos
--- En su lugar, lo validaremos solo en INSERT con un trigger
-
+-- Validación de precios razonables
 alter table public.services 
   drop constraint if exists services_price_reasonable;
 
@@ -29,6 +28,7 @@ comment on constraint services_price_reasonable on public.services is
   'Precio debe estar entre 0.01 y 10,000 para evitar errores';
 
 
+-- Columnas de auditoría para cancelaciones
 alter table public.appointments 
   add column if not exists cancelled_by uuid references public.profiles(id),
   add column if not exists cancelled_at timestamptz,
@@ -43,6 +43,7 @@ create index if not exists idx_appointments_cancelled
   where cancelled_at is not null;
 
 
+-- Función para registrar cancelaciones
 create or replace function public.log_cancellation() 
 returns trigger 
 language plpgsql 
@@ -106,6 +107,34 @@ comment on function public.log_cancellation is
   'Registra automáticamente quién canceló una cita y cuándo';
 
 
+-- Validación de fecha futura (solo para nuevas citas o cambios)
+create or replace function public.validate_future_appointment()
+returns trigger
+language plpgsql
+as $$
+begin
+  -- Solo validar en INSERT o si están cambiando start_time
+  if (TG_OP = 'INSERT') or (NEW.start_time != OLD.start_time) then
+    if NEW.start_time < current_timestamp - interval '1 hour' then
+      raise exception 'No se pueden crear citas en el pasado. La fecha debe ser futura.';
+    end if;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_validate_future_appointment on public.appointments;
+create trigger trg_validate_future_appointment
+  before insert or update on public.appointments
+  for each row
+  execute function public.validate_future_appointment();
+
+comment on function public.validate_future_appointment is
+  'Valida que las citas nuevas o reagendadas sean futuras. No afecta datos históricos.';
+
+
+-- Columnas de depósito
 alter table public.appointments 
   add column if not exists deposit_required numeric(10,2) default 0 check (deposit_required >= 0),
   add column if not exists deposit_paid numeric(10,2) default 0 check (deposit_paid >= 0);
@@ -121,6 +150,7 @@ alter table public.appointments
   check (deposit_paid <= deposit_required);
 
 
+-- Función para calcular depósito requerido
 create or replace function public.calculate_deposit_required()
 returns trigger
 language plpgsql
