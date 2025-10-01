@@ -37,8 +37,11 @@ create policy businesses_admin_write on public.businesses
   using (false)
   with check (false);
 
-raise notice '✅ [6/6] Función helper y RLS básico creados';
-raise notice '🎉 Fase 1 de multitenancy completada';
-raise notice 'Aplicar siguiente: 0206_update_rls_deep.sql';
+do $$
+begin
+  raise notice '✅ [6/6] Función helper y RLS básico creados';
+  raise notice '🎉 Fase 1 de multitenancy completada';
+  raise notice 'Aplicar siguiente: 0206_update_rls_deep.sql';
+end $$;
 
 commit;
