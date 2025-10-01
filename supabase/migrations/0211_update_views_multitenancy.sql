@@ -4,7 +4,6 @@
 -- Dependencies: 0207_update_functions_multitenancy.sql
 -- ===============================================
 
--- Verificar dependencias
 do $$
 begin
   if not exists (
@@ -19,8 +18,15 @@ end $$;
 
 begin;
 
+-- Eliminar vistas existentes
+drop view if exists public.owner_dashboard_metrics cascade;
+drop view if exists public.metrics_daily cascade;
+drop view if exists public.metrics_top_services_global cascade;
+drop view if exists public.inventory_low_stock cascade;
+drop view if exists public.knowledge_popular_questions cascade;
 drop materialized view if exists public.metrics_historical cascade;
 
+-- Crear vista materializada
 create materialized view public.metrics_historical as
 select
     a.business_id,
@@ -61,33 +67,45 @@ on public.metrics_historical (
     service_name
 );
 
-
-create or replace view public.owner_dashboard_metrics as
+-- Vista dashboard
+create view public.owner_dashboard_metrics as
+with daily_appointments as (
+    select
+        a.business_id,
+        date_trunc('day', a.start_time) as day,
+        count(*) filter (where a.status = 'confirmed') as confirmed_appointments,
+        sum(s.base_price) filter (where a.status = 'confirmed') as estimated_revenue
+    from public.appointments a
+    join public.services s on s.id = a.service_id and s.business_id = a.business_id
+    where a.business_id is not null
+    group by a.business_id, day
+),
+top_services as (
+    select distinct on (a.business_id, date_trunc('day', a.start_time))
+        a.business_id,
+        date_trunc('day', a.start_time) as day,
+        s.name as top_service
+    from public.appointments a
+    join public.services s on s.id = a.service_id and s.business_id = a.business_id
+    where a.status = 'confirmed'
+      and a.business_id is not null
+    group by a.business_id, day, s.id, s.name
+    order by a.business_id, day, count(*) desc
+)
 select
-    a.business_id,
-    date_trunc('day', a.start_time) as day,
-    count(*) filter (where a.status = 'confirmed') as confirmed_appointments,
-    sum(s.base_price) filter (where a.status = 'confirmed') as estimated_revenue,
-    (
-        select s2.name
-        from public.services s2
-        join public.appointments a2 on a2.service_id = s2.id 
-        where a2.business_id = a.business_id
-          and s2.business_id = a.business_id
-          and a2.status = 'confirmed'
-          and date_trunc('day', a2.start_time) = date_trunc('day', a.start_time)
-        group by s2.id, s2.name
-        order by count(*) desc
-        limit 1
-    ) as top_service
-from public.appointments a
-join public.services s on s.id = a.service_id and s.business_id = a.business_id
-where a.business_id is not null
-group by a.business_id, day
-order by day desc;
+    da.business_id,
+    da.day,
+    da.confirmed_appointments,
+    da.estimated_revenue,
+    coalesce(ts.top_service, '') as top_service
+from daily_appointments da
+left join top_services ts 
+  on ts.business_id = da.business_id 
+  and ts.day = da.day
+order by da.business_id, da.day desc;
 
-
-create or replace view public.metrics_daily as
+-- Vista diaria
+create view public.metrics_daily as
 with daily_stats as (
     select
         a.business_id,
@@ -129,8 +147,8 @@ left join top_service_per_day ts
   and ts.day = ds.day
 order by ds.business_id, ds.day desc;
 
-
-create or replace view public.metrics_top_services_global as
+-- Vista top servicios
+create view public.metrics_top_services_global as
 select
     s.business_id,
     s.id as service_id,
@@ -147,8 +165,8 @@ where s.business_id is not null
 group by s.business_id, s.id, s.name
 order by s.business_id, confirmed_appointments desc;
 
-
-create or replace view public.inventory_low_stock as
+-- Vista inventario bajo
+create view public.inventory_low_stock as
 select
     business_id,
     id, 
@@ -162,8 +180,8 @@ from public.inventory
 where quantity <= reorder_threshold
 order by business_id, (reorder_threshold - quantity) desc;
 
-
-create or replace view public.knowledge_popular_questions as
+-- Vista preguntas populares
+create view public.knowledge_popular_questions as
 select
     business_id,
     id, 
@@ -175,9 +193,7 @@ from public.knowledge_base
 where view_count > 0
 order by business_id, view_count desc, created_at desc;
 
-
+-- Refrescar vista materializada
 refresh materialized view public.metrics_historical;
 
-
 commit;
-
