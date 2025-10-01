@@ -55,8 +55,8 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'appointments_id_business_key' and conrelid = 'public.appointments'::regclass) then
     alter table public.appointments add constraint appointments_id_business_key unique (id, business_id);
   end if;
+  
+  raise notice '✅ [4/6] Columnas marcadas como NOT NULL y constraints creados';
 end $$;
-
-raise notice '✅ [4/6] Columnas marcadas como NOT NULL y constraints creados';
 
 commit;
