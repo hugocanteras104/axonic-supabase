@@ -4,7 +4,6 @@
 -- Dependencies: 0208_business_settings.sql
 -- ===============================================
 
--- Verificar dependencias
 do $$
 begin
   if not exists (select 1 from pg_tables where tablename = 'business_settings') then
@@ -16,16 +15,8 @@ end $$;
 
 begin;
 
-alter table public.appointments 
-  drop constraint if exists appt_future_only;
-
-alter table public.appointments 
-  add constraint appt_future_only 
-  check (start_time >= current_timestamp - interval '1 hour');
-
-comment on constraint appt_future_only on public.appointments is
-  'Las citas deben agendarse para el futuro (con 1 hora de margen)';
-
+-- NO agregamos constraint de futuro porque tenemos datos históricos
+-- En su lugar, lo validaremos solo en INSERT con un trigger
 
 alter table public.services 
   drop constraint if exists services_price_reasonable;
@@ -184,4 +175,3 @@ comment on function public.calculate_deposit_required is
 
 
 commit;
-
