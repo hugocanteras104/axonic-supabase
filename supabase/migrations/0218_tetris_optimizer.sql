@@ -1,8 +1,22 @@
 -- ===============================================
--- Migration: 0215_tetris_optimizer.sql
+-- Migration: 0218_tetris_optimizer.sql
 -- Purpose: Sistema inteligente de optimización de agenda tipo "Tetris"
--- Dependencies: 0004_functions_triggers.sql
+-- Dependencies: 0004_functions_triggers.sql, 0200-0213
 -- ===============================================
+
+-- Verificar dependencias
+do $$
+begin
+  if not exists (select 1 from pg_proc where proname = 'set_updated_at') then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función set_updated_at()\nAplicar primero: 0004_functions_triggers.sql';
+  end if;
+  
+  if not exists (select 1 from pg_tables where tablename = 'businesses') then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: fase multitenancy completa\nAplicar primero: 0200-0213';
+  end if;
+  
+  raise notice '✅ Dependencias verificadas';
+end $$;
 
 begin;
 

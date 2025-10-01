@@ -1,8 +1,18 @@
 -- ===============================================
--- Migration: 0204_add_validations_audit.sql
+-- Migration: 0209_add_validations_audit.sql
 -- Purpose: Agregar validaciones de negocio y auditoría de cancelaciones
--- Dependencies: 0200_add_multitenancy.sql, 0201_update_rls_multitenancy.sql, 0202_update_functions_multitenancy.sql, 0203_business_settings.sql
+-- Dependencies: 0208_business_settings.sql
 -- ===============================================
+
+-- Verificar dependencias
+do $$
+begin
+  if not exists (select 1 from pg_tables where tablename = 'business_settings') then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: tabla business_settings\nAplicar primero: 0208_business_settings.sql';
+  end if;
+  
+  raise notice '✅ Dependencias verificadas';
+end $$;
 
 begin;
 

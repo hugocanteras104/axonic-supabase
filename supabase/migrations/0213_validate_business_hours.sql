@@ -1,8 +1,22 @@
 -- ===============================================
--- Migration: 0208_validate_business_hours.sql
+-- Migration: 0213_validate_business_hours.sql
 -- Purpose: Enforce business-hour scheduling for appointments
--- Dependencies: 0203_business_settings.sql
+-- Dependencies: 0208_business_settings.sql
 -- ===============================================
+
+-- Verificar dependencias
+do $$
+begin
+  if not exists (select 1 from pg_proc where proname = 'is_within_business_hours') then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: función is_within_business_hours()\nAplicar primero: 0208_business_settings.sql';
+  end if;
+  
+  if not exists (select 1 from pg_tables where tablename = 'business_settings') then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: tabla business_settings\nAplicar primero: 0208_business_settings.sql';
+  end if;
+  
+  raise notice '✅ Dependencias verificadas';
+end $$;
 
 begin;
 

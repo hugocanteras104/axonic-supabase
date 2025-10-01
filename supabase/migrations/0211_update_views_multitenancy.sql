@@ -1,8 +1,21 @@
 -- ===============================================
--- Migration: 0206_update_views_multitenancy.sql
+-- Migration: 0211_update_views_multitenancy.sql
 -- Purpose: Actualizar vistas materializadas y normales con business_id
--- Dependencies: 0200_add_multitenancy.sql
+-- Dependencies: 0207_update_functions_multitenancy.sql
 -- ===============================================
+
+-- Verificar dependencias
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_name = 'appointments' and column_name = 'business_id'
+  ) then
+    raise exception E'❌ DEPENDENCIA FALTANTE\n\nRequiere: columna business_id\nAplicar primero: 0200-0207';
+  end if;
+  
+  raise notice '✅ Dependencias verificadas';
+end $$;
 
 begin;
 
