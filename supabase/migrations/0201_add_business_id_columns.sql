@@ -74,6 +74,9 @@ create index if not exists idx_rb_business on public.resource_blocks(business_id
 create index if not exists idx_ks_business on public.knowledge_suggestions(business_id);
 create index if not exists idx_ar_business on public.appointment_resources(business_id);
 
-raise notice '✅ [2/6] Columnas e índices creados correctamente';
+do $$
+begin
+  raise notice '✅ [2/6] Columnas e índices creados correctamente';
+end $$;
 
 commit;
