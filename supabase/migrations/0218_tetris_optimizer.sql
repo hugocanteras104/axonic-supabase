@@ -25,6 +25,10 @@ do $$ begin
   create type public.tetris_action_type as enum ('adelantar_cita','rellenar_hueco','notificar_lista_espera');
 exception when duplicate_object then null; end $$;
 
+-- Tracking de citas reprogramadas
+alter table if exists public.appointments
+  add column if not exists rescheduled_from jsonb;
+
 -- Tabla para tracking de optimizaciones
 create table if not exists public.agenda_optimizations (
   id uuid primary key default gen_random_uuid(),
@@ -352,9 +356,15 @@ begin
   
   -- Actualizar cita
   update public.appointments
-  set 
+  set
     start_time = p_new_start,
     end_time = v_new_end,
+    rescheduled_from = jsonb_build_object(
+      'original_start', v_appointment.start_time,
+      'original_end', v_appointment.end_time,
+      'reason', p_reason,
+      'moved_at', now()
+    ),
     notes = coalesce(notes || E'\n\n', '') || format(
       '[%s] Cita adelantada desde %s por: %s',
       to_char(now(), 'YYYY-MM-DD HH24:MI'),
