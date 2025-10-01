@@ -83,18 +83,18 @@ create policy payments_owner_all on public.payment_transactions
   for all to authenticated
   using (
     auth.jwt()->>'user_role' = 'owner'
-    and business_id = auth.get_user_business_id()
+    and business_id = public.get_user_business_id()
   )
   with check (
     auth.jwt()->>'user_role' = 'owner'
-    and business_id = auth.get_user_business_id()
+    and business_id = public.get_user_business_id()
   );
 
 drop policy if exists payments_lead_read_own on public.payment_transactions;
 create policy payments_lead_read_own on public.payment_transactions
   for select to authenticated
   using (
-    business_id = auth.get_user_business_id()
+    business_id = public.get_user_business_id()
     and exists (
       select 1 
       from public.appointments a
@@ -123,7 +123,7 @@ declare
   v_user_id uuid;
 begin
   -- Obtener contexto
-  v_business_id := auth.get_user_business_id();
+  v_business_id := public.get_user_business_id();
   
   begin
     v_user_id := (auth.jwt()->>'sub')::uuid;

@@ -52,7 +52,7 @@ declare
   v_user_id uuid;
   v_sql text;
 begin
-  v_business_id := auth.get_user_business_id();
+  v_business_id := public.get_user_business_id();
   
   begin
     v_user_id := (auth.jwt()->>'sub')::uuid;
@@ -120,7 +120,7 @@ declare
   v_user_id uuid;
   v_sql text;
 begin
-  v_business_id := auth.get_user_business_id();
+  v_business_id := public.get_user_business_id();
   
   begin
     v_user_id := (auth.jwt()->>'sub')::uuid;
