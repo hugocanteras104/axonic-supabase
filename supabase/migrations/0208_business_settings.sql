@@ -43,7 +43,6 @@ create index if not exists idx_business_settings_business
 create index if not exists idx_business_settings_key 
   on public.business_settings(business_id, setting_key);
 
-raise notice 'Tabla business_settings creada';
 
 drop trigger if exists trg_upd_business_settings on public.business_settings;
 create trigger trg_upd_business_settings 
@@ -51,7 +50,6 @@ create trigger trg_upd_business_settings
   for each row 
   execute function public.set_updated_at();
 
-raise notice 'Trigger para business_settings creado';
 
 alter table public.business_settings enable row level security;
 
@@ -72,7 +70,6 @@ create policy bs_owner_write on public.business_settings
     and business_id = public.get_user_business_id()
   );
 
-raise notice 'RLS configurado para business_settings';
 
 create or replace function public.is_within_business_hours(
   p_business_id uuid,
@@ -137,7 +134,6 @@ $$;
 comment on function public.is_within_business_hours is
   'Valida si un timestamp está dentro del horario de negocio configurado. Si no hay configuración, usa horario por defecto (Lun-Sáb 9-20h).';
 
-raise notice 'Función is_within_business_hours creada';
 
 create or replace function public.get_business_setting(
   p_setting_key text
@@ -158,10 +154,6 @@ $$;
 comment on function public.get_business_setting is
   'Obtiene una configuración específica del negocio del usuario actual';
 
-raise notice 'Función get_business_setting creada';
 
 commit;
 
-raise notice '========================================';
-raise notice 'Migración 0203_business_settings completada';
-raise notice '========================================';

@@ -51,7 +51,6 @@ begin
     insert into public.kb_views_footprint_archive (original_count, data)
     values (v_archived_count, v_archive_data);
     
-    raise notice 'Respaldo creado: % registros archivados', v_archived_count;
   end if;
   
   -- Paso 3: Eliminar datos antiguos
@@ -60,7 +59,6 @@ begin
   
   get diagnostics v_deleted_count = row_count;
   
-  raise notice 'Limpieza completada: % registros eliminados, % archivados', 
     v_deleted_count, v_archived_count;
   
   -- Retornar estadísticas
@@ -106,7 +104,6 @@ begin
     v_restored_count := v_restored_count + 1;
   end loop;
   
-  raise notice 'Restaurados % registros desde archivo %', v_restored_count, p_archive_id;
   
   return v_restored_count;
 end;
@@ -119,8 +116,3 @@ grant execute on function public.restore_footprint_archive(uuid) to authenticate
 
 commit;
 
-raise notice '========================================';
-raise notice 'Sistema de limpieza segura implementado';
-raise notice 'Los datos se respaldan antes de eliminarse';
-raise notice 'Para restaurar: select public.restore_footprint_archive(archive_id);';
-raise notice '========================================';

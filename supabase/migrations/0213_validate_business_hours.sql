@@ -42,6 +42,3 @@ comment on constraint appt_within_business_hours on public.appointments is
 
 commit;
 
-raise notice '========================================';
-raise notice 'Migración 0208_validate_business_hours completada';
-raise notice '========================================';

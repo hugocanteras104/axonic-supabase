@@ -26,7 +26,6 @@ alter table public.appointments
 comment on constraint appt_future_only on public.appointments is
   'Las citas deben agendarse para el futuro (con 1 hora de margen)';
 
-raise notice '[1/6] Validación: citas futuras';
 
 alter table public.services 
   drop constraint if exists services_price_reasonable;
@@ -38,7 +37,6 @@ alter table public.services
 comment on constraint services_price_reasonable on public.services is
   'Precio debe estar entre 0.01 y 10,000 para evitar errores';
 
-raise notice '[2/6] Validación: precios de servicios';
 
 alter table public.appointments 
   add column if not exists cancelled_by uuid references public.profiles(id),
@@ -53,7 +51,6 @@ create index if not exists idx_appointments_cancelled
   on public.appointments(cancelled_at desc) 
   where cancelled_at is not null;
 
-raise notice '[3/6] Columnas de auditoría agregadas';
 
 create or replace function public.log_cancellation() 
 returns trigger 
@@ -117,7 +114,6 @@ create trigger on_appointment_cancelled
 comment on function public.log_cancellation is
   'Registra automáticamente quién canceló una cita y cuándo';
 
-raise notice '[4/6] Trigger de auditoría de cancelaciones creado';
 
 alter table public.appointments 
   add column if not exists deposit_required numeric(10,2) default 0 check (deposit_required >= 0),
@@ -133,7 +129,6 @@ alter table public.appointments
   add constraint appt_deposit_not_exceed 
   check (deposit_paid <= deposit_required);
 
-raise notice '[5/6] Columnas de depósito agregadas';
 
 create or replace function public.calculate_deposit_required()
 returns trigger
@@ -187,11 +182,6 @@ create trigger trg_calculate_deposit
 comment on function public.calculate_deposit_required is
   'Calcula automáticamente el depósito requerido basándose en las reglas de pricing del negocio';
 
-raise notice '[6/6] Trigger de cálculo de depósitos creado';
 
 commit;
 
-raise notice '========================================';
-raise notice 'Migración 0204_add_validations_audit completada';
-raise notice 'Validaciones y auditoría implementadas';
-raise notice '========================================';

@@ -62,7 +62,3 @@ create trigger trg_validate_business_hours
 
 commit;
 
-raise notice '========================================';
-raise notice 'Validación flexible de horarios implementada';
-raise notice 'Las citas existentes no se invalidan al cambiar horarios';
-raise notice '========================================';

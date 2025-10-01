@@ -53,7 +53,6 @@ on conflict (id) do update set
   address = excluded.address,
   metadata = excluded.metadata;
 
-raise notice 'Negocios de prueba creados';
 
 insert into public.business_settings (business_id, setting_key, setting_value, description)
 values 
@@ -102,7 +101,6 @@ on conflict (business_id, setting_key) do update set
   setting_value = excluded.setting_value,
   description = excluded.description;
 
-raise notice 'Configuración del negocio 1 (Madrid) creada';
 
 insert into public.business_settings (business_id, setting_key, setting_value, description)
 values 
@@ -140,7 +138,6 @@ on conflict (business_id, setting_key) do update set
   setting_value = excluded.setting_value,
   description = excluded.description;
 
-raise notice 'Configuración del negocio 2 (Barcelona) creada';
 
 update public.profiles 
 set business_id = '11111111-1111-1111-1111-111111111111'
@@ -178,18 +175,9 @@ update public.resource_blocks
 set business_id = '11111111-1111-1111-1111-111111111111'
 where business_id = '00000000-0000-0000-0000-000000000000';
 
-raise notice 'Datos existentes reasignados al negocio 1';
 
 select public.generate_test_appointments(90, 30, 8);
 
-raise notice 'Citas de prueba generadas';
 
 commit;
 
-raise notice '========================================';
-raise notice 'Migración 0207_update_seed_multitenancy completada';
-raise notice '';
-raise notice 'Negocios de prueba creados:';
-raise notice '  1. Clínica Belleza Madrid Centro';
-raise notice '  2. Spa Relax Barcelona';
-raise notice '========================================';

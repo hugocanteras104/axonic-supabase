@@ -61,7 +61,6 @@ on public.metrics_historical (
     service_name
 );
 
-raise notice 'Vista materializada metrics_historical actualizada';
 
 create or replace view public.owner_dashboard_metrics as
 select
@@ -87,7 +86,6 @@ where a.business_id is not null
 group by a.business_id, day
 order by day desc;
 
-raise notice 'Vista owner_dashboard_metrics actualizada';
 
 create or replace view public.metrics_daily as
 with daily_stats as (
@@ -131,7 +129,6 @@ left join top_service_per_day ts
   and ts.day = ds.day
 order by ds.business_id, ds.day desc;
 
-raise notice 'Vista metrics_daily actualizada';
 
 create or replace view public.metrics_top_services_global as
 select
@@ -150,7 +147,6 @@ where s.business_id is not null
 group by s.business_id, s.id, s.name
 order by s.business_id, confirmed_appointments desc;
 
-raise notice 'Vista metrics_top_services_global actualizada';
 
 create or replace view public.inventory_low_stock as
 select
@@ -166,7 +162,6 @@ from public.inventory
 where quantity <= reorder_threshold
 order by business_id, (reorder_threshold - quantity) desc;
 
-raise notice 'Vista inventory_low_stock actualizada';
 
 create or replace view public.knowledge_popular_questions as
 select
@@ -180,15 +175,9 @@ from public.knowledge_base
 where view_count > 0
 order by business_id, view_count desc, created_at desc;
 
-raise notice 'Vista knowledge_popular_questions actualizada';
 
 refresh materialized view public.metrics_historical;
 
-raise notice 'Vista materializada metrics_historical refrescada';
 
 commit;
 
-raise notice '========================================';
-raise notice 'Migración 0206_update_views_multitenancy completada';
-raise notice 'Todas las vistas actualizadas con business_id';
-raise notice '========================================';
