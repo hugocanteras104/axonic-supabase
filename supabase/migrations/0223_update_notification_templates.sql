@@ -81,5 +81,3 @@ INSERT INTO public.notification_templates (
 ON CONFLICT (business_id, template_key, channel) DO NOTHING;
 
 COMMIT;
-
-RAISE NOTICE '✅ Migración 0223_update_notification_templates aplicada correctamente';
