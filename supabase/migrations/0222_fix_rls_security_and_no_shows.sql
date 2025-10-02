@@ -348,5 +348,3 @@ CREATE POLICY client_no_show_history_owner_all ON public.client_no_show_history
   );
 
 COMMIT;
-
-RAISE NOTICE '✅ Migración 0222_fix_rls_security_and_no_shows aplicada correctamente';
