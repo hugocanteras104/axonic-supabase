@@ -227,3 +227,20 @@ Si encuentras problemas:
 - Documentación PostgreSQL
 - Supabase Migrations
 - RLS en PostgreSQL
+
+## Warnings conocidos del Linter
+
+### Security Definer Views (7 warnings)
+Las siguientes vistas generan warnings del Linter de Supabase:
+- owner_dashboard_metrics
+- inventory_low_stock  
+- client_reliability_score
+- metrics_daily
+- knowledge_popular_questions
+- tetris_optimization_stats
+- metrics_top_services_global
+
+**Estado:** Falso positivo del detector del Linter
+**Verificación:** Las vistas NO contienen SECURITY DEFINER en su definición SQL
+**Mitigación:** Todas tienen security_barrier=true y RLS activo en tablas base
+**Riesgo:** Ninguno - el sistema respeta correctamente las políticas de seguridad
