@@ -126,5 +126,3 @@ CREATE POLICY calendar_events_lead_read ON public.calendar_events
   );
 
 COMMIT;
-
-RAISE NOTICE '✅ Migración 0220_google_calendar_sync aplicada correctamente';
