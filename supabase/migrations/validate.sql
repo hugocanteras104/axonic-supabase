@@ -1,8 +1,6 @@
 -- ==================================================
 -- validate.sql - Verificador de Estado de Migraciones
 -- ==================================================
--- Ejecutar ANTES de aplicar cualquier migración nueva
--- Uso: psql -d mi_base -f validate.sql
 
 create or replace function validate_migration_state()
 returns table(
@@ -13,9 +11,7 @@ returns table(
   suggestion text
 ) language plpgsql as $$
 begin
-  -- ============================================
   -- 1. Verificar Extensiones (Fase 1)
-  -- ============================================
   
   return query
   select 
@@ -57,9 +53,7 @@ begin
     'Aplicar: 0001_setup_extensions_and_enums.sql'
   where not exists(select 1 from pg_extension where extname = 'btree_gist');
   
-  -- ============================================
   -- 2. Verificar Tablas Principales
-  -- ============================================
   
   return query
   select 
@@ -101,9 +95,7 @@ begin
     'Aplicar: 0002_create_core_tables.sql'
   where not exists(select 1 from pg_tables where tablename = 'knowledge_base');
   
-  -- ============================================
   -- 3. Verificar Multitenancy (Fase 2)
-  -- ============================================
   
   return query
   select 
@@ -152,9 +144,7 @@ begin
     
   end if;
   
-  -- ============================================
   -- 4. Verificar Funciones Críticas
-  -- ============================================
   
   return query
   select 
@@ -197,16 +187,16 @@ begin
       case when exists(
         select 1 from pg_proc p
         join pg_namespace n on p.pronamespace = n.oid
-        where n.nspname = 'auth' and p.proname = 'get_user_business_id'
+        where n.nspname = 'public' and p.proname = 'get_user_business_id'
       ) then '✅' else '❌' end,
-      'Función auth.get_user_business_id()',
+      'Función get_user_business_id()',
       '0206+ (RLS)',
       'CRITICAL',
       'Aplicar: 0205_update_rls_policies.sql'
     where not exists(
       select 1 from pg_proc p
       join pg_namespace n on p.pronamespace = n.oid
-      where n.nspname = 'auth' and p.proname = 'get_user_business_id'
+      where n.nspname = 'public' and p.proname = 'get_user_business_id'
     );
     
     return query
@@ -238,9 +228,7 @@ begin
     
   end if;
   
-  -- ============================================
   -- 5. Verificar Consistencia de Datos
-  -- ============================================
   
   if exists(select 1 from pg_tables where tablename = 'businesses') 
      and exists(
@@ -292,9 +280,7 @@ begin
     
   end if;
   
-  -- ============================================
   -- 6. Verificar Tablas Opcionales
-  -- ============================================
   
   return query
   select 
@@ -328,31 +314,34 @@ begin
     else 'Aplicar: 0209_add_validations_audit.sql si necesitas tracking de pagos'
     end;
   
-  -- ============================================
   -- 7. Mensaje Final
-  -- ============================================
   
-  if not exists(
-    select 1 from validate_migration_state() where severity = 'CRITICAL' and status = '❌'
-  ) then
-    return query
-    select 
-      '🎉' as status,
-      'Estado del sistema' as object_name,
-      'N/A' as required_by,
-      'INFO' as severity,
-      'Sin errores críticos. Sistema operativo.' as suggestion;
-  else
-    return query
-    select 
-      '⚠️' as status,
-      'Estado del sistema' as object_name,
-      'N/A' as required_by,
-      'WARNING' as severity,
-      format('Hay %s errores críticos. Revisar arriba.', 
-        (select count(*) from validate_migration_state() where severity = 'CRITICAL' and status = '❌')
-      ) as suggestion;
-  end if;
+  return query
+  select 
+    '🎉' as status,
+    'Estado del sistema' as object_name,
+    'N/A' as required_by,
+    'INFO' as severity,
+    'Sin errores críticos. Sistema operativo.' as suggestion
+  where not exists(
+    select 1 from validate_migration_state() v 
+    where v.severity = 'CRITICAL' and v.status = '❌'
+  );
+  
+  return query
+  select 
+    '⚠️' as status,
+    'Estado del sistema' as object_name,
+    'N/A' as required_by,
+    'WARNING' as severity,
+    format('Hay %s errores críticos. Revisar arriba.', 
+      (select count(*) from validate_migration_state() v 
+       where v.severity = 'CRITICAL' and v.status = '❌')
+    ) as suggestion
+  where exists(
+    select 1 from validate_migration_state() v 
+    where v.severity = 'CRITICAL' and v.status = '❌'
+  );
   
 end $$;
 
@@ -365,6 +354,5 @@ order by
     else 4
   end,
   object_name;
-
 
 drop function if exists validate_migration_state();
