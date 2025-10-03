@@ -253,3 +253,6 @@
 +🎯 Resumen por Fase
 +FaseMigracionesTiempoRiesgoReversible10001-000715 minBajoSí1.50100-010710 minBajoSí20200-021845 minAltoNo30219-022620 minMedioParcial
 +Total: ~90 minutos
+ 
+EOF
+)
