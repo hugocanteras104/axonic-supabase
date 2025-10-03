@@ -1,246 +1,255 @@
-# 📘 Guía de Migraciones - Axonic Assistant
-
-## 🎯 Reglas de Oro
-
-1. **SIEMPRE** aplicar en orden numérico
-2. **NUNCA** saltar una migración
-3. **SIEMPRE** hacer backup antes de aplicar en producción
-4. Ejecutar `validate.sql` antes de aplicar cualquier migración nueva
-
-## 📋 Orden de Aplicación
-
-### Fase 1: Fundamentos (0001-0007)
-Base del sistema. Sin estas migraciones NADA funciona.
-0001_setup_extensions_and_enums.sql
-↓ Instala herramientas PostgreSQL
-0002_create_core_tables.sql
-↓ Crea tablas principales
-↓ Requiere: 0001
-0003_add_indexes_and_views.sql
-↓ Índices para velocidad
-↓ Requiere: 0002
-0004_functions_triggers.sql
-↓ Funciones automáticas
-↓ Requiere: 0002
-0005_feature_kb_search.sql
-↓ Búsqueda inteligente
-↓ Requiere: 0001, 0002
-0006_policies_rls_grants.sql
-↓ Seguridad
-↓ Requiere: 0002, 0004, 0005
-0007_grant_metrics_views.sql
-↓ Permisos métricas
-↓ Requiere: 0003
-
-### Fase 2: Multi-Negocio (0200-0205)
-⚠️ CRÍTICO: Aplicar TODAS en orden. No saltar ninguna.
-0200_create_businesses_table.sql
-↓ Crea tabla businesses
-↓ Requiere: 0001-0007
-0201_add_business_id_columns.sql
-↓ Agrega columnas business_id
-↓ Requiere: 0200
-0202_migrate_data_to_default_business.sql
-↓ Migra datos existentes
-↓ Requiere: 0201
-0203_make_business_id_required.sql
-↓ Hace business_id obligatorio
-↓ Requiere: 0202
-0204_add_foreign_key_constraints.sql
-↓ Foreign keys compuestas
-↓ Requiere: 0203
-0205_update_rls_policies.sql
-↓ RLS básico + función helper
-↓ Requiere: 0204
-
-### Fase 3: Multi-Negocio Avanzado (0206-0213)
-0206_update_rls_deep.sql
-↓ RLS completo para todas las tablas
-↓ Requiere: 0205 (get_user_business_id)
-0207_update_functions_multitenancy.sql
-↓ Actualiza funciones (slots, KB, etc.)
-↓ Requiere: 0205, 0206
-0208_business_settings.sql
-↓ Configuración por negocio (IMPORTANTE)
-↓ Requiere: 0205
-↓ Crea función: is_within_business_hours()
-0209_add_validations_audit.sql
-↓ Depósitos y auditoría
-↓ Requiere: 0208
-0210_cleanup_footprints.sql
-↓ Limpieza automática
-↓ Requiere: 0005
-0211_update_views_multitenancy.sql
-↓ Vistas materializadas
-↓ Requiere: 0207
-0212_update_seed_multitenancy.sql
-↓ Datos de prueba (dev only)
-↓ Requiere: 0211
-0213_validate_business_hours.sql
-↓ Validar horarios
-↓ Requiere: 0208 (is_within_business_hours)
-
-### Fase 4: Funcionalidades Avanzadas (0214-0219)
-0214_flexible_business_hours.sql
-↓ Horarios flexibles
-↓ Requiere: 0208
-0215_payment_tracking.sql
-↓ Sistema de pagos
-↓ Requiere: 0209
-0216_performance_indexes.sql
-↓ Optimización de velocidad
-↓ Requiere: 0200-0213
-0217_safe_cleanup.sql
-↓ Limpieza con respaldo
-↓ Requiere: 0210
-0218_tetris_optimizer.sql
-↓ Optimización inteligente de agenda
-↓ Requiere: 0004, 0200-0213
-0219_soft_deletes.sql
-↓ Borrado lógico
-↓ Requiere: 0200-0213
-
-## 🔗 Mapa de Dependencias Críticas
-┌─────────────────────────────────────┐
-│  0208 (business_settings)           │
-│  • Crea is_within_business_hours()  │
-└──────────────┬──────────────────────┘
-│
-┌───────┴───────┬──────────────┐
-↓               ↓              ↓
-0209            0213           0211
-(validations)   (validate hrs)  (flexible hrs)
-│
-↓
-0212
-(payments)
-
-┌─────────────────────────────────────┐
-│  0004 (functions_triggers)          │
-│  • Crea set_updated_at()            │
-└──────────────┬──────────────────────┘
-│
-↓
-0215
-(tetris optimizer)
-
-┌─────────────────────────────────────┐
-│  0200-0205 (multitenancy base)      │
-└──────────────┬──────────────────────┘
-│
-┌───────┴───────┬──────────────┐
-↓               ↓              ↓
-0206            0207           0211
-(RLS deep)    (functions)      (views)
-│               │              │
-└───────┬───────┴──────────────┘
-↓
-0212-0216
-(funcionalidades)
-
-## ⚠️ Errores Comunes y Soluciones
-
-### Error 1: `function is_within_business_hours does not exist`
-**Causa:** Aplicaste 0213 sin aplicar 0208  
-**Solución:** 
-```bash
-psql -f supabase/migrations/0208_business_settings.sql
-psql -f supabase/migrations/0213_validate_business_hours.sql
-```
-
-### Error 2: `function auth.get_user_business_id does not exist`
-**Causa:** Saltaste 0205  
-**Solución:** Aplica 0200-0205 en orden
-
-### Error 3: `column business_id does not exist`
-**Causa:** Saltaste fase 2 completa  
-**Solución:** Aplica 0200-0205 en orden
-
-### Error 4: `relation businesses does not exist`
-**Causa:** No aplicaste 0200  
-**Solución:** Aplica 0200 primero
-
-### Error 5: `ERROR: Hay X perfiles sin business_id`
-**Causa:** Saltaste 0202 (migración de datos)  
-**Solución:** Aplica 0202
-
-## 🧪 Testing Antes de Aplicar
-```bash
-# 1. Hacer backup
-pg_dump -h localhost -U postgres -d mi_base > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# 2. Verificar dependencias
-psql -h localhost -U postgres -d mi_base -f supabase/migrations/validate.sql
-
-# 3. Si todo OK, aplicar migración
-psql -h localhost -U postgres -d mi_base -f supabase/migrations/0XXX_nombre.sql
-
-# 4. Verificar que funcionó
-psql -h localhost -U postgres -d mi_base -c "SELECT version, applied_at FROM schema_version ORDER BY version DESC LIMIT 5;"
-```
-
-## 📊 Checklist de Producción
-Antes de aplicar en producción:
-
-- [ ] Backup completo realizado
-- [ ] `validate.sql` ejecutado sin errores
-- [ ] Migraciones probadas en ambiente de desarrollo
-- [ ] Migraciones probadas en ambiente de staging
-- [ ] Ventana de mantenimiento programada (30-60 min)
-- [ ] Plan de rollback documentado
-- [ ] Equipo notificado
-
-## 🚨 Plan de Rollback
-Si algo sale mal durante la fase 2 (multitenancy):
-```sql
--- SOLO en caso de EMERGENCIA
-begin;
-  -- Eliminar constraints
-  alter table profiles drop constraint if exists fk_appointments_profile_business;
-  -- ... (eliminar todos los constraints nuevos)
-  
-  -- Eliminar columnas
-  alter table profiles drop column if exists business_id;
-  -- ... (eliminar de todas las tablas)
-  
-  -- Eliminar tabla
-  drop table if exists businesses cascade;
-  
-  -- Eliminar función
-  drop function if exists auth.get_user_business_id();
-commit;
-
--- Luego restaurar desde backup
-psql -h localhost -U postgres -d mi_base < backup_YYYYMMDD_HHMMSS.sql
-```
-
-## 📞 Soporte
-Si encuentras problemas:
-
-1. Revisa este README
-2. Ejecuta `validate.sql`
-3. Revisa los logs de PostgreSQL
-4. Busca el error específico en la sección "Errores Comunes"
-
-## 📚 Referencias
-
-- Documentación PostgreSQL
-- Supabase Migrations
-- RLS en PostgreSQL
-
-## Warnings conocidos del Linter
-
-### Security Definer Views (7 warnings)
-Las siguientes vistas generan warnings del Linter de Supabase:
-- owner_dashboard_metrics
-- inventory_low_stock  
-- client_reliability_score
-- metrics_daily
-- knowledge_popular_questions
-- tetris_optimization_stats
-- metrics_top_services_global
-
-**Estado:** Falso positivo del detector del Linter
-**Verificación:** Las vistas NO contienen SECURITY DEFINER en su definición SQL
-**Mitigación:** Todas tienen security_barrier=true y RLS activo en tablas base
-**Riesgo:** Ninguno - el sistema respeta correctamente las políticas de seguridad
++📘 Guía de Migraciones - Axonic Assistant
++🎯 Reglas de Oro
++
++SIEMPRE aplicar en orden numérico
++NUNCA saltar una migración
++SIEMPRE hacer backup antes de aplicar en producción
++Ejecutar validate.sql después de cada fase
++
++📋 Orden de Aplicación Completo
++Fase 1: Fundamentos (0001-0007)
++Base del sistema. Sin estas migraciones NADA funciona.
++0001_setup_extensions_and_enums.sql
++↓ Extensiones PostgreSQL (pgcrypto, pg_trgm, unaccent, btree_gist)
++0002_create_core_tables.sql
++↓ Tablas: profiles, services, appointments, inventory, knowledge_base, etc.
++0003_add_indexes_and_views.sql
++↓ Índices de rendimiento y vistas de métricas
++0004_functions_triggers.sql
++↓ set_updated_at(), triggers automáticos
++0005_feature_kb_search.sql
++↓ Búsqueda inteligente en knowledge base
++0006_policies_rls_grants.sql
++↓ Row Level Security (RLS)
++0007_grant_metrics_views.sql
++↓ Permisos para vistas de métricas
++Verificación Fase 1:
++sql-- Ejecutar validate.sql
++-- Debe mostrar ✅ en extensiones, tablas core y funciones básicas
++
++Fase 1.5: Mejoras y Complementos (0099-0107)
++0099_seed_dev.sql
++↓ Datos de prueba (SOLO desarrollo) - OPCIONAL
++
++0100_fix_availability_rpcs.sql
++↓ Corrige funciones get_available_slots() con security definer
++
++0101_waitlist_index_and_comments.sql
++↓ Índice para waitlists activas
++
++0102_more_comments.sql
++↓ Documentación de tablas
++
++0103_add_validations.sql
++↓ Validaciones: formato email, teléfono, duración citas
++
++0104_dashboard_stats.sql
++↓ Funciones: get_today_dashboard(), get_week_summary()
++
++0105_maintenance_functions.sql
++↓ cleanup_old_notifications(), find_unused_resources()
++
++0106_profile_personal_details.sql
++↓ Tabla: cumpleaños, condiciones de piel, hijos
++
++0107_profile_staff_notes.sql
++↓ Tabla: notas internas del staff sobre clientes
++Verificación Fase 1.5:
++sqlSELECT 
++  'Funciones dashboard' as check_type,
++  exists(select 1 from pg_proc where proname = 'get_today_dashboard') as ok
++UNION ALL
++SELECT 
++  'Tabla profile_personal_details',
++  exists(select 1 from pg_tables where tablename = 'profile_personal_details')
++UNION ALL
++SELECT 
++  'Tabla profile_staff_notes',
++  exists(select 1 from pg_tables where tablename = 'profile_staff_notes');
++
++Fase 2: Multitenancy (0200-0218) ⚠️ CRÍTICA
++Esta fase modifica TODAS las tablas existentes. No se puede revertir fácilmente.
++0200_create_businesses_table.sql
++↓ Crea tabla businesses + negocio por defecto
++
++0201_add_business_id_columns.sql
++↓ Añade business_id (nullable) a TODAS las tablas
++
++0202_migrate_data_to_default_business.sql
++↓ Migra datos existentes al negocio por defecto (CRÍTICA)
++
++0203_make_business_id_required.sql
++↓ business_id pasa a NOT NULL
++
++0204_add_foreign_key_constraints.sql
++↓ Foreign keys compuestas (business_id, id)
++
++0205_update_rls_policies.sql
++↓ Crea get_user_business_id() y RLS básico
++
++0206_update_rls_deep.sql
++↓ RLS completo para todas las tablas
++
++0207_update_functions_multitenancy.sql
++↓ Actualiza funciones: get_available_slots(), search_knowledge_base(), etc.
++
++0208_business_settings.sql
++↓ Tabla business_settings + función is_within_business_hours()
++
++0209_add_validations_audit.sql
++↓ Validaciones de negocio + auditoría de cancelaciones
++
++0210_cleanup_footprints.sql
++↓ Limpieza automática con pg_cron
++
++0211_update_views_multitenancy.sql
++↓ Actualiza vistas materializadas con business_id
++
++0213_validate_business_hours.sql
++↓ Trigger de validación de horarios
++
++0214_flexible_business_hours.sql
++↓ Validación flexible (solo citas nuevas)
++
++0215_payment_tracking.sql
++↓ Sistema de pagos y depósitos
++
++0216_performance_indexes.sql
++↓ Índices adicionales de optimización
++
++0217_safe_cleanup.sql
++↓ Limpieza con respaldo automático
++
++0218_tetris_optimizer.sql
++↓ Optimización inteligente de agenda
++Verificación Fase 2:
++sql-- Ejecutar validate.sql
++-- Debe mostrar:
++-- ✅ Tabla businesses
++-- ✅ Columna business_id en todas las tablas
++-- ✅ Función get_user_business_id()
++-- ✅ 0 registros sin business_id
++
++SELECT 
++  (SELECT count(*) FROM businesses) as negocios,
++  (SELECT count(*) FROM profiles WHERE business_id IS NULL) as perfiles_sin_negocio,
++  (SELECT count(*) FROM appointments WHERE business_id IS NULL) as citas_sin_negocio;
++-- Resultado esperado: 1 negocio, 0 sin business_id
++
++Fase 3: Funcionalidades Avanzadas (0219-0226)
++0219_soft_deletes.sql
++↓ Columna deleted_at + funciones soft_delete() y restore_deleted()
++
++0220_google_calendar_sync.sql
++↓ Tabla calendar_events para sincronización con Google Calendar
++
++0221_notification_templates.sql
++↓ Plantillas personalizables de notificaciones
++
++0222_fix_rls_security_and_no_shows.sql
++↓ Fix vulnerabilidad RLS + sistema de no-shows
++
++0223_update_notification_templates.sql
++↓ Plantillas con política de cancelación variable
++
++0224_security_hardening.sql
++↓ Auditoría de seguridad completa
++
++0225_add_table_comments.sql
++↓ Documentación de tablas faltantes
++
++0226_auto_notification_templates.sql
++↓ Trigger para crear plantillas automáticamente
++Verificación Fase 3:
++sql-- Ejecutar validate.sql (debe estar todo ✅)
++
++SELECT 
++  'Soft deletes' as feature,
++  exists(select 1 from information_schema.columns 
++         where table_name = 'appointments' and column_name = 'deleted_at') as habilitado
++UNION ALL
++SELECT 'No-shows',
++  exists(select 1 from information_schema.columns 
++         where table_name = 'appointments' and column_name = 'no_show')
++UNION ALL
++SELECT 'Plantillas notificaciones',
++  exists(select 1 from pg_tables where tablename = 'notification_templates')
++UNION ALL
++SELECT 'Google Calendar sync',
++  exists(select 1 from pg_tables where tablename = 'calendar_events');
++
++🔗 Mapa de Dependencias Críticas
++0208 (business_settings)
++│   Crea: is_within_business_hours()
++├─→ 0209 (validations)
++├─→ 0213 (validate hours)
++└─→ 0214 (flexible hours)
++
++0004 (functions_triggers)
++│   Crea: set_updated_at()
++└─→ 0218 (tetris optimizer)
++
++0200-0205 (multitenancy base)
++├─→ 0206 (RLS deep)
++├─→ 0207 (functions)
++├─→ 0211 (views)
++└─→ 0216-0226 (funcionalidades)
++
++⚠️ Migraciones que NO Existen
++Estas numeraciones están ausentes intencionalmente:
++
++0008-0098: Reservadas para futuro
++0212: Eliminada o fusionada
++
++
++🧪 Testing Antes de Aplicar
++bash# 1. Hacer backup
++pg_dump -h localhost -U postgres -d mi_base > backup_$(date +%Y%m%d_%H%M%S).sql
++
++# 2. Verificar dependencias
++# Ejecutar validate.sql en SQL Editor
++
++# 3. Aplicar migración
++# Copiar/pegar en SQL Editor → Run
++
++# 4. Verificar que funcionó
++# Ejecutar validate.sql de nuevo
++
++📊 Checklist de Producción
++
++ Backup completo realizado
++ validate.sql ejecutado sin errores CRITICAL
++ Migraciones probadas en desarrollo
++ Ventana de mantenimiento programada (30-60 min)
++ Plan de rollback documentado
++ Equipo notificado
++
++
++🚨 Plan de Rollback (Solo emergencias)
++sql-- SOLO SI ALGO SALE MAL en Fase 2
++-- Restaurar desde backup:
++psql -h localhost -U postgres -d mi_base < backup_YYYYMMDD_HHMMSS.sql
++
++📞 Warnings Conocidos del Linter
++Security Definer Views (7 warnings) - Ignorables
++Las siguientes vistas generan falsos positivos:
++
++owner_dashboard_metrics
++inventory_low_stock
++client_reliability_score
++metrics_daily
++knowledge_popular_questions
++tetris_optimization_stats
++metrics_top_services_global
++
++Estado: Las vistas NO usan SECURITY DEFINER, solo security_barrier=true
++Riesgo: Ninguno
++Acción: Ignorar o silenciar con migración 0227 (opcional)
++RLS Disabled en kb_views_footprint - Intencionado
++Tabla: kb_views_footprint
++Razón: Tabla interna de tracking, solo accesible por funciones del sistema
++Acción: Ignorar
++
++🎯 Resumen por Fase
++FaseMigracionesTiempoRiesgoReversible10001-000715 minBajoSí1.50100-010710 minBajoSí20200-021845 minAltoNo30219-022620 minMedioParcial
++Total: ~90 minutos
