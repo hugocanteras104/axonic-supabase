@@ -1,5 +1,5 @@
 -- ===============================================
--- Migration: 0205_cleanup_footprints.sql
+-- Migration: 0210_cleanup_footprints.sql
 -- Purpose: Limpieza automática de datos antiguos
 -- Dependencies: 0005_feature_kb_search.sql, 0200_add_multitenancy.sql
 -- ===============================================
