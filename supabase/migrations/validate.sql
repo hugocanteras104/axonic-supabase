@@ -356,12 +356,6 @@ begin
   
 end $$;
 
-\echo ''
-\echo '════════════════════════════════════════════════════════════════'
-\echo '  VALIDACIÓN DE ESTADO DE MIGRACIONES'
-\echo '════════════════════════════════════════════════════════════════'
-\echo ''
-
 select * from validate_migration_state()
 order by 
   case severity
@@ -372,8 +366,5 @@ order by
   end,
   object_name;
 
-\echo ''
-\echo '════════════════════════════════════════════════════════════════'
-\echo ''
 
 drop function if exists validate_migration_state();
