@@ -1,0 +1,358 @@
+-- ===============================================
+-- TEMPLATE: Configuración de Nuevo Negocio
+-- ===============================================
+-- 
+-- PROPÓSITO:
+-- Este archivo es una PLANTILLA para configurar un nuevo negocio
+-- en el sistema Axonic Assistant.
+--
+-- CÓMO USAR:
+-- 1. Copia este archivo
+-- 2. Renómbralo: 02XX_nombre_negocio_setup.sql
+-- 3. Reemplaza TODOS los valores marcados con -- CAMBIAR:
+-- 4. Ejecuta en Supabase
+--
+-- IMPORTANTE:
+-- - NO ejecutes este archivo directamente
+-- - Es solo una guía de referencia
+-- - Guárdalo en GitHub como documentación
+-- ===============================================
+
+BEGIN;
+
+-- ===============================================
+-- PASO 1: Crear el Negocio
+-- ===============================================
+DO $$
+DECLARE
+  v_business_id uuid;
+  v_owner_id uuid;
+BEGIN
+  
+  -- CREAR NEGOCIO
+  INSERT INTO public.businesses (
+    name,
+    slug,
+    phone,
+    email,
+    address,
+    metadata,
+    is_active
+  ) VALUES (
+    'NOMBRE_NEGOCIO',              -- CAMBIAR: Nombre del negocio
+    'slug-del-negocio',            -- CAMBIAR: URL amigable (sin espacios, minúsculas)
+    '+34XXXXXXXXX',                -- CAMBIAR: Teléfono del negocio
+    'email@negocio.com',           -- CAMBIAR: Email del negocio
+    'Ciudad, Dirección',           -- CAMBIAR: Dirección física
+    jsonb_build_object(
+      'propietario', 'Nombre Propietario',  -- CAMBIAR: Nombre del dueño
+      'sector', 'belleza'                   -- CAMBIAR: belleza, salud, wellness, etc.
+    ),
+    true
+  ) RETURNING id INTO v_business_id;
+
+  RAISE NOTICE '✅ Negocio creado con ID: %', v_business_id;
+
+
+  -- ===============================================
+  -- PASO 2: Configurar Horarios del Negocio
+  -- ===============================================
+  INSERT INTO public.business_settings (
+    business_id,
+    setting_key,
+    setting_value,
+    description
+  ) VALUES (
+    v_business_id,
+    'business_hours',
+    jsonb_build_object(
+      'timezone', 'Europe/Madrid',  -- CAMBIAR: timezone si está en otra zona
+      'schedule', jsonb_build_object(
+        'monday', jsonb_build_object(
+          'open', '09:00',           -- CAMBIAR: Hora apertura
+          'close', '20:00',          -- CAMBIAR: Hora cierre
+          'closed', false
+        ),
+        'tuesday', jsonb_build_object(
+          'open', '09:00',           -- CAMBIAR
+          'close', '20:00',          -- CAMBIAR
+          'closed', false
+        ),
+        'wednesday', jsonb_build_object(
+          'open', '09:00',           -- CAMBIAR
+          'close', '20:00',          -- CAMBIAR
+          'closed', false
+        ),
+        'thursday', jsonb_build_object(
+          'open', '09:00',           -- CAMBIAR
+          'close', '20:00',          -- CAMBIAR
+          'closed', false
+        ),
+        'friday', jsonb_build_object(
+          'open', '09:00',           -- CAMBIAR
+          'close', '20:00',          -- CAMBIAR
+          'closed', false
+        ),
+        'saturday', jsonb_build_object(
+          'open', '09:00',           -- CAMBIAR: O poner closed: true
+          'close', '14:00',          -- CAMBIAR
+          'closed', false
+        ),
+        'sunday', jsonb_build_object(
+          'closed', true             -- CAMBIAR: Si abre domingos
+        )
+      ),
+      'holidays', jsonb_build_array(
+        -- CAMBIAR: Añadir festivos en formato 'YYYY-MM-DD'
+        '2025-01-01',  -- Ejemplo: Año Nuevo
+        '2025-12-25'   -- Ejemplo: Navidad
+      )
+    ),
+    'Horario de atención del negocio'
+  );
+
+  RAISE NOTICE '✅ Horarios configurados';
+
+
+  -- ===============================================
+  -- PASO 3: Crear Perfil del Owner (Propietario)
+  -- ===============================================
+  INSERT INTO public.profiles (
+    business_id,
+    phone_number,
+    role,
+    name,
+    email,
+    metadata
+  ) VALUES (
+    v_business_id,
+    '+34XXXXXXXXX',              -- CAMBIAR: Teléfono del propietario
+    'owner',
+    'Nombre Propietario',        -- CAMBIAR: Nombre del dueño
+    'owner@negocio.com',         -- CAMBIAR: Email del dueño
+    jsonb_build_object(
+      'is_admin', true,
+      'notas', 'Propietario principal'
+    )
+  ) RETURNING id INTO v_owner_id;
+
+  RAISE NOTICE '✅ Perfil owner creado con ID: %', v_owner_id;
+
+
+  -- ===============================================
+  -- PASO 4: Insertar Servicios
+  -- ===============================================
+  -- CAMBIAR: Reemplaza con los servicios reales del negocio
+  -- Formato: (business_id, name, description, base_price, duration_minutes, buffer_minutes, metadata)
+  
+  INSERT INTO public.services (
+    business_id,
+    name,
+    description,
+    base_price,
+    duration_minutes,
+    buffer_minutes,
+    metadata
+  ) VALUES
+    -- Ejemplo: Depilación
+    (v_business_id, 'Depilación Zona Pequeña', 'Axilas, labio superior, etc.', 25.00, 20, 10, '{"categoria": "depilacion"}'),
+    (v_business_id, 'Depilación Zona Grande', 'Piernas completas, espalda', 90.00, 45, 15, '{"categoria": "depilacion"}'),
+    
+    -- Ejemplo: Tratamientos faciales
+    (v_business_id, 'Limpieza Facial Básica', 'Limpieza profunda de piel', 45.00, 60, 15, '{"categoria": "facial"}'),
+    (v_business_id, 'Peeling Químico', 'Exfoliación con ácidos', 75.00, 60, 15, '{"categoria": "facial"}'),
+    
+    -- Ejemplo: Masajes
+    (v_business_id, 'Masaje Relajante', 'Masaje corporal 60 minutos', 60.00, 60, 15, '{"categoria": "masajes"}'),
+    (v_business_id, 'Masaje Deportivo', 'Masaje descontracturante', 75.00, 75, 15, '{"categoria": "masajes"}')
+  ;
+
+  RAISE NOTICE '✅ Servicios insertados';
+
+
+  -- ===============================================
+  -- PASO 5: Insertar Clientes (Leads)
+  -- ===============================================
+  -- CAMBIAR: Reemplaza con los clientes reales
+  -- Formato: (business_id, phone_number, name, email, role, metadata)
+  
+  INSERT INTO public.profiles (
+    business_id,
+    phone_number,
+    name,
+    email,
+    role,
+    metadata
+  ) VALUES
+    (v_business_id, '+34600111111', 'Cliente Ejemplo 1', 'cliente1@example.com', 'lead', '{"notas": "Cliente regular"}'),
+    (v_business_id, '+34600222222', 'Cliente Ejemplo 2', NULL, 'lead', '{"notas": "Primera visita"}'),
+    (v_business_id, '+34600333333', 'Cliente Ejemplo 3', 'cliente3@example.com', 'lead', '{"ocupacion": "profesora"}')
+  ;
+
+  RAISE NOTICE '✅ Clientes insertados';
+
+
+  -- ===============================================
+  -- PASO 6: Insertar Inventario/Productos
+  -- ===============================================
+  -- CAMBIAR: Reemplaza con los productos reales
+  -- Formato: (business_id, sku, name, quantity, reorder_threshold, price, metadata)
+  
+  INSERT INTO public.inventory (
+    business_id,
+    sku,
+    name,
+    quantity,
+    reorder_threshold,
+    price,
+    metadata
+  ) VALUES
+    (v_business_id, 'PROD-001', 'Crema Hidratante 50ml', 15, 5, 28.50, '{"marca": "Ejemplo", "categoria": "facial"}'),
+    (v_business_id, 'PROD-002', 'Sérum Vitamina C 30ml', 10, 3, 42.00, '{"marca": "Ejemplo", "categoria": "facial"}'),
+    (v_business_id, 'PROD-003', 'Protector Solar SPF50', 20, 8, 26.00, '{"marca": "Ejemplo", "categoria": "proteccion"}')
+  ;
+
+  RAISE NOTICE '✅ Inventario insertado';
+
+
+  -- ===============================================
+  -- PASO 7: Base de Conocimiento
+  -- ===============================================
+  -- CAMBIAR: Reemplaza con las preguntas frecuentes reales
+  -- Formato: (business_id, category, question, answer, metadata)
+  
+  INSERT INTO public.knowledge_base (
+    business_id,
+    category,
+    question,
+    answer,
+    metadata
+  ) VALUES
+    (
+      v_business_id,
+      'servicios',
+      '¿Qué servicios ofrecen?',
+      'Ofrecemos servicios de depilación, tratamientos faciales y masajes. Puedes ver todos nuestros servicios disponibles y sus precios consultando con nosotros.',
+      '{"keywords": ["servicios", "tratamientos", "oferta"]}'
+    ),
+    (
+      v_business_id,
+      'citas',
+      '¿Cómo puedo agendar una cita?',
+      'Puedes agendar tu cita directamente por WhatsApp con nosotros. Te mostraremos los horarios disponibles y confirmaremos tu cita al instante.',
+      '{"keywords": ["agendar", "cita", "reserva", "horario"]}'
+    ),
+    (
+      v_business_id,
+      'ubicacion',
+      '¿Dónde están ubicados?',
+      'Estamos ubicados en [DIRECCIÓN COMPLETA]. Horario de atención: [HORARIO]. Puedes llegar en metro/bus [INDICACIONES].',
+      '{"keywords": ["ubicacion", "direccion", "donde", "como llegar"]}'
+    ),
+    (
+      v_business_id,
+      'pago',
+      '¿Qué métodos de pago aceptan?',
+      'Aceptamos efectivo, tarjeta de crédito/débito, transferencia bancaria y Bizum.',
+      '{"keywords": ["pago", "metodos", "tarjeta", "efectivo", "bizum"]}'
+    ),
+    (
+      v_business_id,
+      'cancelacion',
+      '¿Cuál es la política de cancelación?',
+      'Puedes cancelar o reprogramar tu cita con al menos 24 horas de anticipación sin cargo. Cancelaciones con menos tiempo pueden tener un cargo del 50% del servicio.',
+      '{"keywords": ["cancelacion", "politica", "reprogramar", "cambiar"]}'
+    )
+  ;
+
+  RAISE NOTICE '✅ Base de conocimiento insertada';
+
+
+  -- ===============================================
+  -- PASO 8: Reglas de Cross-Selling (Opcional)
+  -- ===============================================
+  -- CAMBIAR: Define qué servicios recomendar después de otros
+  -- Ejemplo: Después de depilación → recomendar crema hidratante
+  
+  -- Primero necesitamos los IDs de los servicios
+  -- (Esto es un ejemplo, ajusta según tus servicios reales)
+  
+  -- INSERT INTO public.cross_sell_rules (
+  --   business_id,
+  --   trigger_service_id,
+  --   recommended_service_id,
+  --   message_template,
+  --   priority
+  -- )
+  -- SELECT
+  --   v_business_id,
+  --   s1.id,
+  --   s2.id,
+  --   'Después de {trigger_service}, te recomendamos {recommended_service} para mejores resultados.',
+  --   1
+  -- FROM public.services s1
+  -- CROSS JOIN public.services s2
+  -- WHERE s1.business_id = v_business_id
+  --   AND s2.business_id = v_business_id
+  --   AND s1.name = 'Servicio 1'  -- CAMBIAR
+  --   AND s2.name = 'Servicio 2'  -- CAMBIAR
+  -- ;
+
+  RAISE NOTICE '✅ Cross-selling configurado (si aplica)';
+
+
+  -- ===============================================
+  -- PASO 9: Plantillas de Notificaciones
+  -- ===============================================
+  -- Crear plantillas por defecto
+  PERFORM public.create_default_notification_templates(v_business_id);
+  
+  RAISE NOTICE '✅ Plantillas de notificación creadas';
+
+
+  -- ===============================================
+  -- FIN DE LA CONFIGURACIÓN
+  -- ===============================================
+  RAISE NOTICE '';
+  RAISE NOTICE '════════════════════════════════════════';
+  RAISE NOTICE '✅ CONFIGURACIÓN COMPLETADA';
+  RAISE NOTICE '════════════════════════════════════════';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Business ID: %', v_business_id;
+  RAISE NOTICE 'Owner ID: %', v_owner_id;
+  RAISE NOTICE '';
+  RAISE NOTICE '📋 PRÓXIMOS PASOS:';
+  RAISE NOTICE '1. Verifica los datos en Supabase';
+  RAISE NOTICE '2. Configura N8N con el business_id';
+  RAISE NOTICE '3. Prueba el bot con un cliente de prueba';
+  RAISE NOTICE '';
+  RAISE NOTICE '════════════════════════════════════════';
+
+END $$;
+
+COMMIT;
+
+-- ===============================================
+-- NOTAS ADICIONALES
+-- ===============================================
+--
+-- RECURSOS (opcional):
+-- Si el negocio usa recursos (salas, equipos, personal):
+--
+-- INSERT INTO public.resources (business_id, name, type, status, metadata)
+-- VALUES
+--   (v_business_id, 'Sala 1', 'room', 'available', '{"capacidad": 1}'),
+--   (v_business_id, 'Equipo Láser', 'equipment', 'available', '{"marca": "X"}'),
+--   (v_business_id, 'Esteticista María', 'staff', 'available', '{"especialidad": "facial"}');
+--
+--
+-- HORARIOS DEL PERSONAL (opcional):
+-- Si necesitas configurar horarios específicos del staff:
+--
+-- INSERT INTO public.staff_availability (business_id, staff_resource_id, day_of_week, start_time, end_time)
+-- VALUES
+--   (v_business_id, [staff_id], 1, '09:00', '17:00'),  -- Lunes
+--   (v_business_id, [staff_id], 2, '09:00', '17:00'),  -- Martes
+--   ...;
+--
+-- ===============================================
