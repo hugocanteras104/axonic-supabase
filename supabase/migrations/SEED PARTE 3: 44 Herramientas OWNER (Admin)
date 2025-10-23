@@ -1,0 +1,587 @@
+-- ===============================================
+-- SEED PARTE 3: 44 Herramientas OWNER (Admin)
+-- Sistema Tool Discovery - Dermaclinic Madrid
+-- ===============================================
+
+BEGIN;
+
+INSERT INTO global_tool_definitions (
+  tool_name, tool_category, description, keywords, original_keywords,
+  parameters, rpc_function_name, requires_role
+) VALUES
+
+-- ===================================================
+-- OWNER (44 herramientas administrativas)
+-- ===================================================
+
+-- 114. crear_servicio
+(
+  'crear_servicio',
+  'OWNER',
+  'Crear un nuevo servicio en el catálogo',
+  ARRAY['crear', 'servicio', 'nuevo', 'agregar', 'anadir'],
+  ARRAY['crear', 'servicio', 'nuevo', 'agregar', 'anadir'],
+  '{"name": {"type": "string", "required": true}, "description": {"type": "string", "required": false}, "base_price": {"type": "number", "required": true}, "duration_minutes": {"type": "integer", "required": true}}'::jsonb,
+  'create_service',
+  ARRAY['owner']
+),
+
+-- 115. actualizar_servicio
+(
+  'actualizar_servicio',
+  'OWNER',
+  'Actualizar información de un servicio existente',
+  ARRAY['actualizar', 'modificar', 'editar', 'servicio'],
+  ARRAY['actualizar', 'modificar', 'editar', 'servicio'],
+  '{"service_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_service',
+  ARRAY['owner']
+),
+
+-- 116. eliminar_servicio
+(
+  'eliminar_servicio',
+  'OWNER',
+  'Desactivar o eliminar un servicio',
+  ARRAY['eliminar', 'borrar', 'desactivar', 'servicio'],
+  ARRAY['eliminar', 'borrar', 'desactivar', 'servicio'],
+  '{"service_id": {"type": "uuid", "required": true}, "soft_delete": {"type": "boolean", "required": false}}'::jsonb,
+  'delete_service',
+  ARRAY['owner']
+),
+
+-- 117. crear_staff
+(
+  'crear_staff',
+  'OWNER',
+  'Agregar nuevo miembro del personal',
+  ARRAY['crear', 'staff', 'empleado', 'personal', 'agregar'],
+  ARRAY['crear', 'staff', 'empleado', 'personal', 'agregar'],
+  '{"name": {"type": "string", "required": true}, "phone": {"type": "string", "required": true}, "email": {"type": "string", "required": false}, "role": {"type": "string", "required": true}}'::jsonb,
+  'create_staff_member',
+  ARRAY['owner']
+),
+
+-- 118. actualizar_staff
+(
+  'actualizar_staff',
+  'OWNER',
+  'Actualizar información del personal',
+  ARRAY['actualizar', 'modificar', 'staff', 'empleado'],
+  ARRAY['actualizar', 'modificar', 'staff', 'empleado'],
+  '{"staff_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_staff_member',
+  ARRAY['owner']
+),
+
+-- 119. listar_staff
+(
+  'listar_staff',
+  'OWNER',
+  'Ver lista completa del personal',
+  ARRAY['listar', 'staff', 'empleados', 'personal', 'equipo'],
+  ARRAY['listar', 'staff', 'empleados', 'personal', 'equipo'],
+  '{"include_inactive": {"type": "boolean", "required": false}}'::jsonb,
+  'list_staff',
+  ARRAY['owner']
+),
+
+-- 120. asignar_servicio_staff
+(
+  'asignar_servicio_staff',
+  'OWNER',
+  'Asignar servicios que puede realizar un staff',
+  ARRAY['asignar', 'servicio', 'staff', 'capacitado'],
+  ARRAY['asignar', 'servicio', 'staff', 'capacitado'],
+  '{"staff_id": {"type": "uuid", "required": true}, "service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'assign_service_to_staff',
+  ARRAY['owner']
+),
+
+-- 121. configurar_horario_negocio
+(
+  'configurar_horario_negocio',
+  'OWNER',
+  'Establecer horario de atención del negocio',
+  ARRAY['horario', 'configurar', 'negocio', 'atencion'],
+  ARRAY['horario', 'configurar', 'negocio', 'atencion'],
+  '{"day_of_week": {"type": "integer", "required": true}, "open_time": {"type": "time", "required": true}, "close_time": {"type": "time", "required": true}}'::jsonb,
+  'set_business_hours',
+  ARRAY['owner']
+),
+
+-- 122. crear_bloqueo_agenda
+(
+  'crear_bloqueo_agenda',
+  'OWNER',
+  'Bloquear horario en la agenda (vacaciones, mantenimiento)',
+  ARRAY['bloquear', 'horario', 'agenda', 'vacaciones', 'cerrado'],
+  ARRAY['bloquear', 'horario', 'agenda', 'vacaciones', 'cerrado'],
+  '{"start_datetime": {"type": "timestamp", "required": true}, "end_datetime": {"type": "timestamp", "required": true}, "reason": {"type": "string", "required": false}}'::jsonb,
+  'create_schedule_block',
+  ARRAY['owner']
+),
+
+-- 123. eliminar_bloqueo_agenda
+(
+  'eliminar_bloqueo_agenda',
+  'OWNER',
+  'Remover bloqueo de horario',
+  ARRAY['eliminar', 'quitar', 'bloqueo', 'liberar'],
+  ARRAY['eliminar', 'quitar', 'bloqueo', 'liberar'],
+  '{"block_id": {"type": "uuid", "required": true}}'::jsonb,
+  'delete_schedule_block',
+  ARRAY['owner']
+),
+
+-- 124. listar_bloqueos
+(
+  'listar_bloqueos',
+  'OWNER',
+  'Ver todos los bloqueos de agenda activos',
+  ARRAY['listar', 'bloqueos', 'agenda', 'cerrados'],
+  ARRAY['listar', 'bloqueos', 'agenda', 'cerrados'],
+  '{"start_date": {"type": "date", "required": false}, "end_date": {"type": "date", "required": false}}'::jsonb,
+  'list_schedule_blocks',
+  ARRAY['owner']
+),
+
+-- 125. crear_recurso
+(
+  'crear_recurso',
+  'OWNER',
+  'Agregar nuevo recurso (sala, equipo)',
+  ARRAY['crear', 'recurso', 'sala', 'equipo', 'agregar'],
+  ARRAY['crear', 'recurso', 'sala', 'equipo', 'agregar'],
+  '{"name": {"type": "string", "required": true}, "resource_type": {"type": "string", "required": true}, "capacity": {"type": "integer", "required": false}}'::jsonb,
+  'create_resource',
+  ARRAY['owner']
+),
+
+-- 126. actualizar_recurso
+(
+  'actualizar_recurso',
+  'OWNER',
+  'Actualizar información de un recurso',
+  ARRAY['actualizar', 'modificar', 'recurso', 'editar'],
+  ARRAY['actualizar', 'modificar', 'recurso', 'editar'],
+  '{"resource_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_resource',
+  ARRAY['owner']
+),
+
+-- 127. bloquear_recurso
+(
+  'bloquear_recurso',
+  'OWNER',
+  'Bloquear recurso temporalmente (mantenimiento)',
+  ARRAY['bloquear', 'recurso', 'mantenimiento', 'fuera servicio'],
+  ARRAY['bloquear', 'recurso', 'mantenimiento', 'fuera servicio'],
+  '{"resource_id": {"type": "uuid", "required": true}, "start_datetime": {"type": "timestamp", "required": true}, "end_datetime": {"type": "timestamp", "required": true}, "reason": {"type": "string", "required": false}}'::jsonb,
+  'block_resource',
+  ARRAY['owner']
+),
+
+-- 128. listar_recursos
+(
+  'listar_recursos',
+  'OWNER',
+  'Ver todos los recursos disponibles',
+  ARRAY['listar', 'recursos', 'salas', 'equipos'],
+  ARRAY['listar', 'recursos', 'salas', 'equipos'],
+  '{"resource_type": {"type": "string", "required": false}}'::jsonb,
+  'list_resources',
+  ARRAY['owner']
+),
+
+-- 129. crear_articulo_conocimiento
+(
+  'crear_articulo_conocimiento',
+  'OWNER',
+  'Crear artículo en base de conocimiento',
+  ARRAY['crear', 'articulo', 'conocimiento', 'faq', 'pregunta'],
+  ARRAY['crear', 'articulo', 'conocimiento', 'faq', 'pregunta'],
+  '{"category": {"type": "string", "required": true}, "question": {"type": "string", "required": true}, "answer": {"type": "string", "required": true}}'::jsonb,
+  'create_knowledge_article',
+  ARRAY['owner']
+),
+
+-- 130. actualizar_articulo_conocimiento
+(
+  'actualizar_articulo_conocimiento',
+  'OWNER',
+  'Actualizar artículo de conocimiento existente',
+  ARRAY['actualizar', 'modificar', 'conocimiento', 'articulo'],
+  ARRAY['actualizar', 'modificar', 'conocimiento', 'articulo'],
+  '{"kb_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_knowledge_article',
+  ARRAY['owner']
+),
+
+-- 131. eliminar_articulo_conocimiento
+(
+  'eliminar_articulo_conocimiento',
+  'OWNER',
+  'Eliminar artículo de la base de conocimiento',
+  ARRAY['eliminar', 'borrar', 'conocimiento', 'articulo'],
+  ARRAY['eliminar', 'borrar', 'conocimiento', 'articulo'],
+  '{"kb_id": {"type": "uuid", "required": true}}'::jsonb,
+  'delete_knowledge_article',
+  ARRAY['owner']
+),
+
+-- 132. revisar_sugerencias
+(
+  'revisar_sugerencias',
+  'OWNER',
+  'Ver sugerencias de clientes pendientes de revisar',
+  ARRAY['sugerencias', 'pendientes', 'revisar', 'clientes'],
+  ARRAY['sugerencias', 'pendientes', 'revisar', 'clientes'],
+  '{"status": {"type": "string", "required": false}}'::jsonb,
+  'review_suggestions',
+  ARRAY['owner']
+),
+
+-- 133. aprobar_sugerencia
+(
+  'aprobar_sugerencia',
+  'OWNER',
+  'Aprobar y crear artículo desde sugerencia',
+  ARRAY['aprobar', 'sugerencia', 'aceptar', 'crear'],
+  ARRAY['aprobar', 'sugerencia', 'aceptar', 'crear'],
+  '{"suggestion_id": {"type": "uuid", "required": true}}'::jsonb,
+  'approve_suggestion',
+  ARRAY['owner']
+),
+
+-- 134. rechazar_sugerencia
+(
+  'rechazar_sugerencia',
+  'OWNER',
+  'Rechazar una sugerencia de cliente',
+  ARRAY['rechazar', 'sugerencia', 'denegar', 'descartar'],
+  ARRAY['rechazar', 'sugerencia', 'denegar', 'descartar'],
+  '{"suggestion_id": {"type": "uuid", "required": true}, "reason": {"type": "string", "required": false}}'::jsonb,
+  'reject_suggestion',
+  ARRAY['owner']
+),
+
+-- 135. crear_regla_cross_sell
+(
+  'crear_regla_cross_sell',
+  'OWNER',
+  'Crear regla de venta cruzada entre servicios',
+  ARRAY['cross sell', 'regla', 'venta cruzada', 'crear'],
+  ARRAY['cross sell', 'regla', 'venta cruzada', 'crear'],
+  '{"trigger_service_id": {"type": "uuid", "required": true}, "recommended_service_id": {"type": "uuid", "required": true}, "message_template": {"type": "string", "required": false}, "priority": {"type": "integer", "required": false}}'::jsonb,
+  'create_cross_sell_rule',
+  ARRAY['owner']
+),
+
+-- 136. actualizar_regla_cross_sell
+(
+  'actualizar_regla_cross_sell',
+  'OWNER',
+  'Actualizar regla de venta cruzada',
+  ARRAY['actualizar', 'cross sell', 'regla', 'modificar'],
+  ARRAY['actualizar', 'cross sell', 'regla', 'modificar'],
+  '{"rule_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_cross_sell_rule',
+  ARRAY['owner']
+),
+
+-- 137. eliminar_regla_cross_sell
+(
+  'eliminar_regla_cross_sell',
+  'OWNER',
+  'Eliminar regla de venta cruzada',
+  ARRAY['eliminar', 'cross sell', 'regla', 'borrar'],
+  ARRAY['eliminar', 'cross sell', 'regla', 'borrar'],
+  '{"rule_id": {"type": "uuid", "required": true}}'::jsonb,
+  'delete_cross_sell_rule',
+  ARRAY['owner']
+),
+
+-- 138. listar_reglas_cross_sell
+(
+  'listar_reglas_cross_sell',
+  'OWNER',
+  'Ver todas las reglas de venta cruzada',
+  ARRAY['listar', 'cross sell', 'reglas', 'ver'],
+  ARRAY['listar', 'cross sell', 'reglas', 'ver'],
+  '{}'::jsonb,
+  'list_cross_sell_rules',
+  ARRAY['owner']
+),
+
+-- 139. crear_plantilla_notificacion
+(
+  'crear_plantilla_notificacion',
+  'OWNER',
+  'Crear plantilla para notificaciones automáticas',
+  ARRAY['crear', 'plantilla', 'notificacion', 'mensaje'],
+  ARRAY['crear', 'plantilla', 'notificacion', 'mensaje'],
+  '{"template_key": {"type": "string", "required": true}, "subject": {"type": "string", "required": false}, "body_template": {"type": "string", "required": true}, "channel": {"type": "string", "required": true}}'::jsonb,
+  'create_notification_template',
+  ARRAY['owner']
+),
+
+-- 140. actualizar_plantilla_notificacion
+(
+  'actualizar_plantilla_notificacion',
+  'OWNER',
+  'Actualizar plantilla de notificación existente',
+  ARRAY['actualizar', 'plantilla', 'notificacion', 'modificar'],
+  ARRAY['actualizar', 'plantilla', 'notificacion', 'modificar'],
+  '{"template_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_notification_template',
+  ARRAY['owner']
+),
+
+-- 141. listar_plantillas_notificacion
+(
+  'listar_plantillas_notificacion',
+  'OWNER',
+  'Ver todas las plantillas de notificación',
+  ARRAY['listar', 'plantillas', 'notificaciones', 'ver'],
+  ARRAY['listar', 'plantillas', 'notificaciones', 'ver'],
+  '{"channel": {"type": "string", "required": false}}'::jsonb,
+  'list_notification_templates',
+  ARRAY['owner']
+),
+
+-- 142. enviar_notificacion_masiva
+(
+  'enviar_notificacion_masiva',
+  'OWNER',
+  'Enviar notificación a múltiples clientes',
+  ARRAY['enviar', 'masiva', 'notificacion', 'todos', 'campana'],
+  ARRAY['enviar', 'masiva', 'notificacion', 'todos', 'campana'],
+  '{"profile_ids": {"type": "array", "required": true}, "message": {"type": "string", "required": true}, "channel": {"type": "string", "required": true}}'::jsonb,
+  'send_bulk_notification',
+  ARRAY['owner']
+),
+
+-- 143. configurar_recordatorios
+(
+  'configurar_recordatorios',
+  'OWNER',
+  'Configurar recordatorios automáticos de citas',
+  ARRAY['configurar', 'recordatorios', 'automaticos', 'citas'],
+  ARRAY['configurar', 'recordatorios', 'automaticos', 'citas'],
+  '{"hours_before": {"type": "integer", "required": true}, "enabled": {"type": "boolean", "required": true}, "template_id": {"type": "uuid", "required": false}}'::jsonb,
+  'configure_reminders',
+  ARRAY['owner']
+),
+
+-- 144. ver_cola_notificaciones
+(
+  'ver_cola_notificaciones',
+  'OWNER',
+  'Ver notificaciones pendientes de enviar',
+  ARRAY['cola', 'notificaciones', 'pendientes', 'queue'],
+  ARRAY['cola', 'notificaciones', 'pendientes', 'queue'],
+  '{"status": {"type": "string", "required": false}, "limit": {"type": "integer", "required": false}}'::jsonb,
+  'view_notification_queue',
+  ARRAY['owner']
+),
+
+-- 145. reenviar_notificacion
+(
+  'reenviar_notificacion',
+  'OWNER',
+  'Reenviar notificación fallida',
+  ARRAY['reenviar', 'notificacion', 'reintentar', 'fallida'],
+  ARRAY['reenviar', 'notificacion', 'reintentar', 'fallida'],
+  '{"notification_id": {"type": "uuid", "required": true}}'::jsonb,
+  'resend_notification',
+  ARRAY['owner']
+),
+
+-- 146. actualizar_configuracion_negocio
+(
+  'actualizar_configuracion_negocio',
+  'OWNER',
+  'Actualizar configuración general del negocio',
+  ARRAY['configuracion', 'negocio', 'actualizar', 'settings'],
+  ARRAY['configuracion', 'negocio', 'actualizar', 'settings'],
+  '{"settings": {"type": "object", "required": true}}'::jsonb,
+  'update_business_settings',
+  ARRAY['owner']
+),
+
+-- 147. exportar_datos_cliente
+(
+  'exportar_datos_cliente',
+  'OWNER',
+  'Exportar todos los datos de un cliente (GDPR)',
+  ARRAY['exportar', 'datos', 'cliente', 'gdpr'],
+  ARRAY['exportar', 'datos', 'cliente', 'gdpr'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'export_client_data',
+  ARRAY['owner']
+),
+
+-- 148. eliminar_datos_cliente
+(
+  'eliminar_datos_cliente',
+  'OWNER',
+  'Eliminar permanentemente datos de un cliente (GDPR)',
+  ARRAY['eliminar', 'datos', 'cliente', 'gdpr', 'permanente'],
+  ARRAY['eliminar', 'datos', 'cliente', 'gdpr', 'permanente'],
+  '{"profile_id": {"type": "uuid", "required": true}, "confirmation_code": {"type": "string", "required": true}}'::jsonb,
+  'delete_client_data_permanent',
+  ARRAY['owner']
+),
+
+-- 149. buscar_clientes
+(
+  'buscar_clientes',
+  'OWNER',
+  'Buscar clientes por nombre, teléfono o email',
+  ARRAY['buscar', 'clientes', 'encontrar', 'cliente'],
+  ARRAY['buscar', 'clientes', 'encontrar', 'cliente'],
+  '{"search_query": {"type": "string", "required": true}}'::jsonb,
+  'search_clients',
+  ARRAY['owner']
+),
+
+-- 150. listar_todos_clientes
+(
+  'listar_todos_clientes',
+  'OWNER',
+  'Ver lista completa de clientes',
+  ARRAY['listar', 'clientes', 'todos', 'ver'],
+  ARRAY['listar', 'clientes', 'todos', 'ver'],
+  '{"role_filter": {"type": "string", "required": false}, "include_inactive": {"type": "boolean", "required": false}}'::jsonb,
+  'list_all_clients',
+  ARRAY['owner']
+),
+
+-- 151. actualizar_rol_cliente
+(
+  'actualizar_rol_cliente',
+  'OWNER',
+  'Cambiar rol de un cliente (lead/owner)',
+  ARRAY['actualizar', 'rol', 'cliente', 'cambiar'],
+  ARRAY['actualizar', 'rol', 'cliente', 'cambiar'],
+  '{"profile_id": {"type": "uuid", "required": true}, "new_role": {"type": "string", "required": true}}'::jsonb,
+  'update_client_role',
+  ARRAY['owner']
+),
+
+-- 152. ver_metricas_globales
+(
+  'ver_metricas_globales',
+  'OWNER',
+  'Ver métricas generales del negocio',
+  ARRAY['metricas', 'globales', 'dashboard', 'generales'],
+  ARRAY['metricas', 'globales', 'dashboard', 'generales'],
+  '{}'::jsonb,
+  'get_global_metrics',
+  ARRAY['owner']
+),
+
+-- 153. refrescar_metricas
+(
+  'refrescar_metricas',
+  'OWNER',
+  'Refrescar vista materializada de métricas',
+  ARRAY['refrescar', 'metricas', 'actualizar', 'recalcular'],
+  ARRAY['refrescar', 'metricas', 'actualizar', 'recalcular'],
+  '{}'::jsonb,
+  'refresh_metrics_historical',
+  ARRAY['owner']
+),
+
+-- 154. crear_descuento_especial
+(
+  'crear_descuento_especial',
+  'OWNER',
+  'Crear descuento especial para cliente',
+  ARRAY['crear', 'descuento', 'especial', 'promocion', 'cliente'],
+  ARRAY['crear', 'descuento', 'especial', 'promocion', 'cliente'],
+  '{"profile_id": {"type": "uuid", "required": true}, "service_id": {"type": "uuid", "required": true}, "discount_percent": {"type": "number", "required": true}, "valid_until": {"type": "date", "required": false}}'::jsonb,
+  'create_special_discount',
+  ARRAY['owner']
+),
+
+-- 155. listar_descuentos_activos
+(
+  'listar_descuentos_activos',
+  'OWNER',
+  'Ver todos los descuentos activos',
+  ARRAY['listar', 'descuentos', 'activos', 'promociones'],
+  ARRAY['listar', 'descuentos', 'activos', 'promociones'],
+  '{}'::jsonb,
+  'list_active_discounts',
+  ARRAY['owner']
+),
+
+-- 156. crear_nota_cliente
+(
+  'crear_nota_cliente',
+  'OWNER',
+  'Agregar nota privada sobre un cliente',
+  ARRAY['nota', 'cliente', 'comentario', 'observacion'],
+  ARRAY['nota', 'cliente', 'comentario', 'observacion'],
+  '{"profile_id": {"type": "uuid", "required": true}, "note_text": {"type": "string", "required": true}, "category": {"type": "string", "required": false}}'::jsonb,
+  'create_client_note',
+  ARRAY['owner']
+),
+
+-- 157. ver_notas_cliente
+(
+  'ver_notas_cliente',
+  'OWNER',
+  'Ver todas las notas de un cliente',
+  ARRAY['notas', 'cliente', 'ver', 'historial'],
+  ARRAY['notas', 'cliente', 'ver', 'historial'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_client_notes',
+  ARRAY['owner']
+);
+
+COMMIT;
+
+-- ===================================================
+-- VERIFICACIÓN FINAL
+-- ===================================================
+
+DO $$
+DECLARE
+  v_count_always int;
+  v_count_features int;
+  v_count_owner int;
+  v_total int;
+BEGIN
+  SELECT COUNT(*) INTO v_count_always FROM global_tool_definitions WHERE tool_category = 'ALWAYS';
+  SELECT COUNT(*) INTO v_count_features FROM global_tool_definitions WHERE tool_category LIKE 'FEATURES.%';
+  SELECT COUNT(*) INTO v_count_owner FROM global_tool_definitions WHERE tool_category = 'OWNER';
+  
+  v_total := v_count_always + v_count_features + v_count_owner;
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '════════════════════════════════════════════════════════════';
+  RAISE NOTICE '🎉 SEED COMPLETADO - TODAS LAS HERRAMIENTAS CARGADAS';
+  RAISE NOTICE '════════════════════════════════════════════════════════════';
+  RAISE NOTICE '';
+  RAISE NOTICE '📊 RESUMEN FINAL:';
+  RAISE NOTICE '   ALWAYS (Core): % herramientas', v_count_always;
+  RAISE NOTICE '   FEATURES: % herramientas', v_count_features;
+  RAISE NOTICE '   OWNER: % herramientas', v_count_owner;
+  RAISE NOTICE '   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+  RAISE NOTICE '   TOTAL: % herramientas ✅', v_total;
+  RAISE NOTICE '';
+  RAISE NOTICE '🎯 SISTEMA LISTO PARA PRODUCCIÓN';
+  RAISE NOTICE '';
+  RAISE NOTICE '🧪 PRUEBA EL SISTEMA:';
+  RAISE NOTICE '   SELECT * FROM search_available_tools(';
+  RAISE NOTICE '     ''tu-business-id''::uuid,';
+  RAISE NOTICE '     ''quiero agendar una cita'',';
+  RAISE NOTICE '     ''lead'',';
+  RAISE NOTICE '     10';
+  RAISE NOTICE '   );';
+  RAISE NOTICE '';
+  RAISE NOTICE '════════════════════════════════════════════════════════════';
+END $$;
