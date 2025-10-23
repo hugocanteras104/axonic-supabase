@@ -1,0 +1,965 @@
+-- ===============================================
+-- SEED PARTE 2: 72 Herramientas FEATURES
+-- Sistema Tool Discovery - Dermaclinic Madrid
+-- Waitlist (8) + Packages (10) + Analytics (20) + Inventory (12) + No Shows (8) + Dual Mode (10) + Reviews (5) = 73
+-- Nota: Son 73 en realidad, no 72
+-- ===============================================
+
+BEGIN;
+
+INSERT INTO global_tool_definitions (
+  tool_name, tool_category, description, keywords, original_keywords,
+  parameters, rpc_function_name, requires_role
+) VALUES
+
+-- ===================================================
+-- WAITLIST (8 herramientas)
+-- ===================================================
+
+-- 41. agregar_waitlist
+(
+  'agregar_waitlist',
+  'FEATURES.WAITLIST',
+  'Agregar cliente a lista de espera',
+  ARRAY['waitlist', 'lista espera', 'espera', 'agregar', 'apuntar', 'anotar'],
+  ARRAY['waitlist', 'lista espera', 'espera', 'agregar', 'apuntar', 'anotar'],
+  '{"profile_id": {"type": "uuid", "required": true}, "service_id": {"type": "uuid", "required": true}, "priority": {"type": "integer", "required": false}}'::jsonb,
+  'add_to_waitlist',
+  ARRAY['lead', 'owner']
+),
+
+-- 42. consultar_posicion_waitlist
+(
+  'consultar_posicion_waitlist',
+  'FEATURES.WAITLIST',
+  'Consultar posición en lista de espera',
+  ARRAY['posicion', 'lugar', 'puesto', 'waitlist', 'cola'],
+  ARRAY['posicion', 'lugar', 'puesto', 'waitlist', 'cola'],
+  '{"waitlist_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_waitlist_position',
+  ARRAY['lead', 'owner']
+),
+
+-- 43. notificar_slot_disponible
+(
+  'notificar_slot_disponible',
+  'FEATURES.WAITLIST',
+  'Notificar a cliente en waitlist sobre disponibilidad',
+  ARRAY['notificar', 'avisar', 'disponible', 'slot', 'hueco'],
+  ARRAY['notificar', 'avisar', 'disponible', 'slot', 'hueco'],
+  '{"waitlist_id": {"type": "uuid", "required": true}, "slot_datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'notify_waitlist_client',
+  ARRAY['owner']
+),
+
+-- 44. siguiente_en_waitlist
+(
+  'siguiente_en_waitlist',
+  'FEATURES.WAITLIST',
+  'Obtener siguiente cliente en waitlist para un servicio',
+  ARRAY['siguiente', 'proximo', 'waitlist', 'cola'],
+  ARRAY['siguiente', 'proximo', 'waitlist', 'cola'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_next_waitlist_client',
+  ARRAY['owner']
+),
+
+-- 45. remover_waitlist
+(
+  'remover_waitlist',
+  'FEATURES.WAITLIST',
+  'Remover cliente de lista de espera',
+  ARRAY['remover', 'quitar', 'eliminar', 'salir', 'waitlist'],
+  ARRAY['remover', 'quitar', 'eliminar', 'salir', 'waitlist'],
+  '{"waitlist_id": {"type": "uuid", "required": true}}'::jsonb,
+  'remove_from_waitlist',
+  ARRAY['lead', 'owner']
+),
+
+-- 46. listar_waitlist_servicio
+(
+  'listar_waitlist_servicio',
+  'FEATURES.WAITLIST',
+  'Ver todos los clientes en waitlist de un servicio',
+  ARRAY['lista', 'waitlist', 'todos', 'ver', 'servicio'],
+  ARRAY['lista', 'waitlist', 'todos', 'ver', 'servicio'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'list_waitlist_by_service',
+  ARRAY['owner']
+),
+
+-- 47. convertir_waitlist_cita
+(
+  'convertir_waitlist_cita',
+  'FEATURES.WAITLIST',
+  'Convertir entrada de waitlist en cita confirmada',
+  ARRAY['convertir', 'agendar', 'confirmar', 'waitlist', 'cita'],
+  ARRAY['convertir', 'agendar', 'confirmar', 'waitlist', 'cita'],
+  '{"waitlist_id": {"type": "uuid", "required": true}, "datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'convert_waitlist_to_appointment',
+  ARRAY['owner']
+),
+
+-- 48. actualizar_prioridad_waitlist
+(
+  'actualizar_prioridad_waitlist',
+  'FEATURES.WAITLIST',
+  'Actualizar prioridad de cliente en waitlist',
+  ARRAY['prioridad', 'cambiar', 'actualizar', 'waitlist'],
+  ARRAY['prioridad', 'cambiar', 'actualizar', 'waitlist'],
+  '{"waitlist_id": {"type": "uuid", "required": true}, "new_priority": {"type": "integer", "required": true}}'::jsonb,
+  'update_waitlist_priority',
+  ARRAY['owner']
+),
+
+-- ===================================================
+-- PACKAGES (10 herramientas)
+-- ===================================================
+
+-- 49. comprar_bono
+(
+  'comprar_bono',
+  'FEATURES.PACKAGES',
+  'Comprar un paquete o bono de sesiones',
+  ARRAY['comprar', 'bono', 'paquete', 'sesiones', 'pack'],
+  ARRAY['comprar', 'bono', 'paquete', 'sesiones', 'pack'],
+  '{"profile_id": {"type": "uuid", "required": true}, "package_id": {"type": "uuid", "required": true}}'::jsonb,
+  'purchase_package',
+  ARRAY['lead', 'owner']
+),
+
+-- 50. consultar_bonos_cliente
+(
+  'consultar_bonos_cliente',
+  'FEATURES.PACKAGES',
+  'Ver bonos/paquetes activos del cliente',
+  ARRAY['bonos', 'paquetes', 'mis bonos', 'activos', 'tengo'],
+  ARRAY['bonos', 'paquetes', 'mis bonos', 'activos', 'tengo'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_client_packages',
+  ARRAY['lead', 'owner']
+),
+
+-- 51. consumir_sesion_bono
+(
+  'consumir_sesion_bono',
+  'FEATURES.PACKAGES',
+  'Usar una sesión del bono del cliente',
+  ARRAY['consumir', 'usar', 'sesion', 'bono', 'descontar'],
+  ARRAY['consumir', 'usar', 'sesion', 'bono', 'descontar'],
+  '{"package_id": {"type": "uuid", "required": true}, "appointment_id": {"type": "uuid", "required": true}}'::jsonb,
+  'consume_package_session',
+  ARRAY['owner']
+),
+
+-- 52. verificar_sesiones_restantes
+(
+  'verificar_sesiones_restantes',
+  'FEATURES.PACKAGES',
+  'Consultar sesiones restantes en un bono',
+  ARRAY['restantes', 'quedan', 'sesiones', 'bono', 'cuantas'],
+  ARRAY['restantes', 'quedan', 'sesiones', 'bono', 'cuantas'],
+  '{"package_id": {"type": "uuid", "required": true}}'::jsonb,
+  'check_package_sessions_remaining',
+  ARRAY['lead', 'owner']
+),
+
+-- 53. listar_paquetes_disponibles
+(
+  'listar_paquetes_disponibles',
+  'FEATURES.PACKAGES',
+  'Ver todos los paquetes/bonos disponibles para compra',
+  ARRAY['paquetes', 'bonos', 'disponibles', 'ofertas', 'promociones'],
+  ARRAY['paquetes', 'bonos', 'disponibles', 'ofertas', 'promociones'],
+  '{}'::jsonb,
+  'list_available_packages',
+  ARRAY['lead', 'owner']
+),
+
+-- 54. verificar_validez_bono
+(
+  'verificar_validez_bono',
+  'FEATURES.PACKAGES',
+  'Verificar si un bono sigue vigente',
+  ARRAY['valido', 'vigente', 'vencido', 'caducado', 'bono'],
+  ARRAY['valido', 'vigente', 'vencido', 'caducado', 'bono'],
+  '{"package_id": {"type": "uuid", "required": true}}'::jsonb,
+  'check_package_validity',
+  ARRAY['lead', 'owner']
+),
+
+-- 55. extender_validez_bono
+(
+  'extender_validez_bono',
+  'FEATURES.PACKAGES',
+  'Extender fecha de vencimiento de un bono',
+  ARRAY['extender', 'ampliar', 'prorrogar', 'validez', 'bono'],
+  ARRAY['extender', 'ampliar', 'prorrogar', 'validez', 'bono'],
+  '{"package_id": {"type": "uuid", "required": true}, "new_expiry_date": {"type": "date", "required": true}}'::jsonb,
+  'extend_package_expiry',
+  ARRAY['owner']
+),
+
+-- 56. transferir_bono
+(
+  'transferir_bono',
+  'FEATURES.PACKAGES',
+  'Transferir bono a otro cliente',
+  ARRAY['transferir', 'pasar', 'regalar', 'bono'],
+  ARRAY['transferir', 'pasar', 'regalar', 'bono'],
+  '{"package_id": {"type": "uuid", "required": true}, "new_profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'transfer_package',
+  ARRAY['owner']
+),
+
+-- 57. historial_uso_bono
+(
+  'historial_uso_bono',
+  'FEATURES.PACKAGES',
+  'Ver historial de uso de sesiones del bono',
+  ARRAY['historial', 'uso', 'sesiones', 'bono', 'consumidas'],
+  ARRAY['historial', 'uso', 'sesiones', 'bono', 'consumidas'],
+  '{"package_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_package_usage_history',
+  ARRAY['lead', 'owner']
+),
+
+-- 58. aplicar_descuento_bono
+(
+  'aplicar_descuento_bono',
+  'FEATURES.PACKAGES',
+  'Aplicar descuento especial a un bono',
+  ARRAY['descuento', 'rebaja', 'promocion', 'bono'],
+  ARRAY['descuento', 'rebaja', 'promocion', 'bono'],
+  '{"package_id": {"type": "uuid", "required": true}, "discount_percent": {"type": "number", "required": true}}'::jsonb,
+  'apply_package_discount',
+  ARRAY['owner']
+),
+
+-- ===================================================
+-- ANALYTICS (20 herramientas)
+-- ===================================================
+
+-- 59. dashboard_hoy
+(
+  'dashboard_hoy',
+  'FEATURES.ANALYTICS',
+  'Obtener dashboard con estadísticas del día',
+  ARRAY['dashboard', 'hoy', 'estadisticas', 'resumen', 'metricas'],
+  ARRAY['dashboard', 'hoy', 'estadisticas', 'resumen', 'metricas'],
+  '{}'::jsonb,
+  'get_today_dashboard',
+  ARRAY['owner']
+),
+
+-- 60. resumen_semana
+(
+  'resumen_semana',
+  'FEATURES.ANALYTICS',
+  'Obtener resumen semanal de actividad',
+  ARRAY['semana', 'resumen', 'semanal', 'estadisticas'],
+  ARRAY['semana', 'resumen', 'semanal', 'estadisticas'],
+  '{"week_offset": {"type": "integer", "required": false}}'::jsonb,
+  'get_week_summary',
+  ARRAY['owner']
+),
+
+-- 61. citas_por_servicio
+(
+  'citas_por_servicio',
+  'FEATURES.ANALYTICS',
+  'Reporte de citas agrupadas por servicio',
+  ARRAY['citas', 'servicio', 'reporte', 'estadistica'],
+  ARRAY['citas', 'servicio', 'reporte', 'estadistica'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'get_appointments_by_service',
+  ARRAY['owner']
+),
+
+-- 62. ingresos_periodo
+(
+  'ingresos_periodo',
+  'FEATURES.ANALYTICS',
+  'Calcular ingresos de un período',
+  ARRAY['ingresos', 'ventas', 'dinero', 'periodo', 'ganancias'],
+  ARRAY['ingresos', 'ventas', 'dinero', 'periodo', 'ganancias'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'calculate_revenue',
+  ARRAY['owner']
+),
+
+-- 63. tasa_cancelacion
+(
+  'tasa_cancelacion',
+  'FEATURES.ANALYTICS',
+  'Calcular tasa de cancelación de citas',
+  ARRAY['cancelaciones', 'tasa', 'porcentaje', 'canceladas'],
+  ARRAY['cancelaciones', 'tasa', 'porcentaje', 'canceladas'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'calculate_cancellation_rate',
+  ARRAY['owner']
+),
+
+-- 64. ocupacion_agenda
+(
+  'ocupacion_agenda',
+  'FEATURES.ANALYTICS',
+  'Ver porcentaje de ocupación de la agenda',
+  ARRAY['ocupacion', 'agenda', 'porcentaje', 'lleno'],
+  ARRAY['ocupacion', 'agenda', 'porcentaje', 'lleno'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'calculate_schedule_occupancy',
+  ARRAY['owner']
+),
+
+-- 65. clientes_nuevos
+(
+  'clientes_nuevos',
+  'FEATURES.ANALYTICS',
+  'Contar clientes nuevos en un período',
+  ARRAY['clientes', 'nuevos', 'registrados', 'periodo'],
+  ARRAY['clientes', 'nuevos', 'registrados', 'periodo'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'count_new_clients',
+  ARRAY['owner']
+),
+
+-- 66. clientes_recurrentes
+(
+  'clientes_recurrentes',
+  'FEATURES.ANALYTICS',
+  'Identificar clientes con más de X citas',
+  ARRAY['recurrentes', 'frecuentes', 'leales', 'clientes'],
+  ARRAY['recurrentes', 'frecuentes', 'leales', 'clientes'],
+  '{"min_appointments": {"type": "integer", "required": false}}'::jsonb,
+  'get_recurring_clients',
+  ARRAY['owner']
+),
+
+-- 67. servicios_mas_vendidos
+(
+  'servicios_mas_vendidos',
+  'FEATURES.ANALYTICS',
+  'Ranking de servicios más solicitados',
+  ARRAY['servicios', 'mas vendidos', 'populares', 'top', 'ranking'],
+  ARRAY['servicios', 'mas vendidos', 'populares', 'top', 'ranking'],
+  '{"start_date": {"type": "date", "required": false}, "end_date": {"type": "date", "required": false}, "limit": {"type": "integer", "required": false}}'::jsonb,
+  'get_top_selling_services',
+  ARRAY['owner']
+),
+
+-- 68. horarios_pico
+(
+  'horarios_pico',
+  'FEATURES.ANALYTICS',
+  'Identificar horarios de mayor demanda',
+  ARRAY['horarios', 'pico', 'demanda', 'ocupados', 'concurridos'],
+  ARRAY['horarios', 'pico', 'demanda', 'ocupados', 'concurridos'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'get_peak_hours',
+  ARRAY['owner']
+),
+
+-- 69. ticket_promedio
+(
+  'ticket_promedio',
+  'FEATURES.ANALYTICS',
+  'Calcular valor promedio por cliente',
+  ARRAY['ticket', 'promedio', 'valor', 'gasto medio'],
+  ARRAY['ticket', 'promedio', 'valor', 'gasto medio'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'calculate_average_ticket',
+  ARRAY['owner']
+),
+
+-- 70. exportar_metricas
+(
+  'exportar_metricas',
+  'FEATURES.ANALYTICS',
+  'Exportar métricas del mes para análisis',
+  ARRAY['exportar', 'descargar', 'metricas', 'datos'],
+  ARRAY['exportar', 'descargar', 'metricas', 'datos'],
+  '{"month": {"type": "integer", "required": true}, "year": {"type": "integer", "required": true}}'::jsonb,
+  'export_monthly_metrics',
+  ARRAY['owner']
+),
+
+-- 71. comparar_periodos
+(
+  'comparar_periodos',
+  'FEATURES.ANALYTICS',
+  'Comparar métricas entre dos períodos',
+  ARRAY['comparar', 'periodos', 'vs', 'comparacion'],
+  ARRAY['comparar', 'periodos', 'vs', 'comparacion'],
+  '{"period1_start": {"type": "date", "required": true}, "period1_end": {"type": "date", "required": true}, "period2_start": {"type": "date", "required": true}, "period2_end": {"type": "date", "required": true}}'::jsonb,
+  'compare_periods',
+  ARRAY['owner']
+),
+
+-- 72. tendencias_mensuales
+(
+  'tendencias_mensuales',
+  'FEATURES.ANALYTICS',
+  'Ver tendencias de crecimiento mensual',
+  ARRAY['tendencias', 'mensuales', 'crecimiento', 'evolucion'],
+  ARRAY['tendencias', 'mensuales', 'crecimiento', 'evolucion'],
+  '{"months_back": {"type": "integer", "required": false}}'::jsonb,
+  'get_monthly_trends',
+  ARRAY['owner']
+),
+
+-- 73. clientes_inactivos
+(
+  'clientes_inactivos',
+  'FEATURES.ANALYTICS',
+  'Identificar clientes sin citas hace X días',
+  ARRAY['inactivos', 'ausentes', 'sin citas', 'recuperar'],
+  ARRAY['inactivos', 'ausentes', 'sin citas', 'recuperar'],
+  '{"days_threshold": {"type": "integer", "required": true}}'::jsonb,
+  'get_inactive_clients',
+  ARRAY['owner']
+),
+
+-- 74. performance_staff
+(
+  'performance_staff',
+  'FEATURES.ANALYTICS',
+  'Ver métricas de desempeño del personal',
+  ARRAY['performance', 'staff', 'personal', 'empleados', 'desempeno'],
+  ARRAY['performance', 'staff', 'personal', 'empleados', 'desempeno'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'get_staff_performance',
+  ARRAY['owner']
+),
+
+-- 75. analisis_rentabilidad_servicio
+(
+  'analisis_rentabilidad_servicio',
+  'FEATURES.ANALYTICS',
+  'Analizar rentabilidad por servicio',
+  ARRAY['rentabilidad', 'servicio', 'margen', 'ganancia'],
+  ARRAY['rentabilidad', 'servicio', 'margen', 'ganancia'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'analyze_service_profitability',
+  ARRAY['owner']
+),
+
+-- 76. proyeccion_ingresos
+(
+  'proyeccion_ingresos',
+  'FEATURES.ANALYTICS',
+  'Proyección de ingresos basada en citas confirmadas',
+  ARRAY['proyeccion', 'ingresos', 'estimado', 'prevision'],
+  ARRAY['proyeccion', 'ingresos', 'estimado', 'prevision'],
+  '{"days_ahead": {"type": "integer", "required": false}}'::jsonb,
+  'project_revenue',
+  ARRAY['owner']
+),
+
+-- 77. metricas_retencion
+(
+  'metricas_retencion',
+  'FEATURES.ANALYTICS',
+  'Calcular métricas de retención de clientes',
+  ARRAY['retencion', 'lealtad', 'fidelidad', 'clientes'],
+  ARRAY['retencion', 'lealtad', 'fidelidad', 'clientes'],
+  '{"cohort_month": {"type": "date", "required": true}}'::jsonb,
+  'calculate_retention_metrics',
+  ARRAY['owner']
+),
+
+-- 78. analisis_cross_sell
+(
+  'analisis_cross_sell',
+  'FEATURES.ANALYTICS',
+  'Analizar efectividad de venta cruzada',
+  ARRAY['cross sell', 'venta cruzada', 'efectividad', 'complementarios'],
+  ARRAY['cross sell', 'venta cruzada', 'efectividad', 'complementarios'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'analyze_cross_sell_effectiveness',
+  ARRAY['owner']
+),
+
+-- ===================================================
+-- INVENTORY (12 herramientas)
+-- ===================================================
+
+-- 79. consultar_inventario
+(
+  'consultar_inventario',
+  'FEATURES.INVENTORY',
+  'Ver todo el inventario disponible',
+  ARRAY['inventario', 'stock', 'productos', 'disponible'],
+  ARRAY['inventario', 'stock', 'productos', 'disponible'],
+  '{}'::jsonb,
+  'get_inventory',
+  ARRAY['owner']
+),
+
+-- 80. buscar_producto_sku
+(
+  'buscar_producto_sku',
+  'FEATURES.INVENTORY',
+  'Buscar producto por SKU',
+  ARRAY['buscar', 'producto', 'sku', 'codigo'],
+  ARRAY['buscar', 'producto', 'sku', 'codigo'],
+  '{"sku": {"type": "string", "required": true}}'::jsonb,
+  'find_product_by_sku',
+  ARRAY['owner']
+),
+
+-- 81. verificar_stock
+(
+  'verificar_stock',
+  'FEATURES.INVENTORY',
+  'Verificar cantidad disponible de un producto',
+  ARRAY['stock', 'cantidad', 'disponible', 'quedan'],
+  ARRAY['stock', 'cantidad', 'disponible', 'quedan'],
+  '{"sku": {"type": "string", "required": true}}'::jsonb,
+  'check_stock',
+  ARRAY['owner']
+),
+
+-- 82. decrementar_inventario
+(
+  'decrementar_inventario',
+  'FEATURES.INVENTORY',
+  'Reducir cantidad de producto en inventario',
+  ARRAY['decrementar', 'reducir', 'usar', 'consumir', 'stock'],
+  ARRAY['decrementar', 'reducir', 'usar', 'consumir', 'stock'],
+  '{"sku": {"type": "string", "required": true}, "quantity": {"type": "integer", "required": true}}'::jsonb,
+  'decrement_inventory',
+  ARRAY['owner']
+),
+
+-- 83. agregar_producto
+(
+  'agregar_producto',
+  'FEATURES.INVENTORY',
+  'Agregar nuevo producto al inventario',
+  ARRAY['agregar', 'nuevo', 'producto', 'inventario'],
+  ARRAY['agregar', 'nuevo', 'producto', 'inventario'],
+  '{"name": {"type": "string", "required": true}, "sku": {"type": "string", "required": true}, "quantity": {"type": "integer", "required": true}, "reorder_threshold": {"type": "integer", "required": false}, "price": {"type": "number", "required": false}}'::jsonb,
+  'add_product',
+  ARRAY['owner']
+),
+
+-- 84. actualizar_stock
+(
+  'actualizar_stock',
+  'FEATURES.INVENTORY',
+  'Actualizar cantidad de stock de un producto',
+  ARRAY['actualizar', 'stock', 'cantidad', 'modificar'],
+  ARRAY['actualizar', 'stock', 'cantidad', 'modificar'],
+  '{"sku": {"type": "string", "required": true}, "new_quantity": {"type": "integer", "required": true}}'::jsonb,
+  'update_stock',
+  ARRAY['owner']
+),
+
+-- 85. productos_bajo_stock
+(
+  'productos_bajo_stock',
+  'FEATURES.INVENTORY',
+  'Listar productos con stock bajo (debajo del umbral)',
+  ARRAY['bajo stock', 'poco', 'reorden', 'alerta'],
+  ARRAY['bajo stock', 'poco', 'reorden', 'alerta'],
+  '{}'::jsonb,
+  'get_low_stock_products',
+  ARRAY['owner']
+),
+
+-- 86. historial_movimientos
+(
+  'historial_movimientos',
+  'FEATURES.INVENTORY',
+  'Ver historial de movimientos de un producto',
+  ARRAY['historial', 'movimientos', 'producto', 'transacciones'],
+  ARRAY['historial', 'movimientos', 'producto', 'transacciones'],
+  '{"sku": {"type": "string", "required": true}}'::jsonb,
+  'get_product_movement_history',
+  ARRAY['owner']
+),
+
+-- 87. eliminar_producto
+(
+  'eliminar_producto',
+  'FEATURES.INVENTORY',
+  'Eliminar producto del inventario',
+  ARRAY['eliminar', 'borrar', 'quitar', 'producto'],
+  ARRAY['eliminar', 'borrar', 'quitar', 'producto'],
+  '{"sku": {"type": "string", "required": true}}'::jsonb,
+  'delete_product',
+  ARRAY['owner']
+),
+
+-- 88. actualizar_precio_producto
+(
+  'actualizar_precio_producto',
+  'FEATURES.INVENTORY',
+  'Actualizar precio de un producto',
+  ARRAY['precio', 'actualizar', 'cambiar', 'producto'],
+  ARRAY['precio', 'actualizar', 'cambiar', 'producto'],
+  '{"sku": {"type": "string", "required": true}, "new_price": {"type": "number", "required": true}}'::jsonb,
+  'update_product_price',
+  ARRAY['owner']
+),
+
+-- 89. buscar_productos_texto
+(
+  'buscar_productos_texto',
+  'FEATURES.INVENTORY',
+  'Buscar productos por nombre o descripción',
+  ARRAY['buscar', 'productos', 'nombre', 'descripcion'],
+  ARRAY['buscar', 'productos', 'nombre', 'descripcion'],
+  '{"search_query": {"type": "string", "required": true}}'::jsonb,
+  'search_products',
+  ARRAY['owner']
+),
+
+-- 90. valor_total_inventario
+(
+  'valor_total_inventario',
+  'FEATURES.INVENTORY',
+  'Calcular valor total del inventario',
+  ARRAY['valor', 'total', 'inventario', 'precio'],
+  ARRAY['valor', 'total', 'inventario', 'precio'],
+  '{}'::jsonb,
+  'calculate_inventory_value',
+  ARRAY['owner']
+),
+
+-- ===================================================
+-- NO_SHOWS (8 herramientas)
+-- ===================================================
+
+-- 91. registrar_no_show
+(
+  'registrar_no_show',
+  'FEATURES.NO_SHOWS',
+  'Marcar que un cliente no asistió a su cita',
+  ARRAY['no show', 'ausencia', 'no vino', 'falta', 'registrar'],
+  ARRAY['no show', 'ausencia', 'no vino', 'falta', 'registrar'],
+  '{"appointment_id": {"type": "uuid", "required": true}}'::jsonb,
+  'mark_no_show',
+  ARRAY['owner']
+),
+
+-- 92. historial_no_shows_cliente
+(
+  'historial_no_shows_cliente',
+  'FEATURES.NO_SHOWS',
+  'Ver historial de ausencias de un cliente',
+  ARRAY['historial', 'no shows', 'ausencias', 'cliente'],
+  ARRAY['historial', 'no shows', 'ausencias', 'cliente'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_client_no_show_history',
+  ARRAY['owner']
+),
+
+-- 93. calcular_confiabilidad_cliente
+(
+  'calcular_confiabilidad_cliente',
+  'FEATURES.NO_SHOWS',
+  'Calcular score de confiabilidad basado en asistencia',
+  ARRAY['confiabilidad', 'score', 'reliability', 'asistencia'],
+  ARRAY['confiabilidad', 'score', 'reliability', 'asistencia'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'calculate_reliability_score',
+  ARRAY['owner']
+),
+
+-- 94. listar_clientes_riesgo
+(
+  'listar_clientes_riesgo',
+  'FEATURES.NO_SHOWS',
+  'Listar clientes con alto riesgo de no show',
+  ARRAY['riesgo', 'alto', 'clientes', 'no show', 'propensos'],
+  ARRAY['riesgo', 'alto', 'clientes', 'no show', 'propensos'],
+  '{"risk_level": {"type": "string", "required": false}}'::jsonb,
+  'get_high_risk_clients',
+  ARRAY['owner']
+),
+
+-- 95. aplicar_penalizacion
+(
+  'aplicar_penalizacion',
+  'FEATURES.NO_SHOWS',
+  'Aplicar penalización por no show',
+  ARRAY['penalizacion', 'multa', 'cargo', 'no show'],
+  ARRAY['penalizacion', 'multa', 'cargo', 'no show'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "amount": {"type": "number", "required": true}}'::jsonb,
+  'apply_no_show_penalty',
+  ARRAY['owner']
+),
+
+-- 96. tasa_no_show_periodo
+(
+  'tasa_no_show_periodo',
+  'FEATURES.NO_SHOWS',
+  'Calcular tasa de no-show en un período',
+  ARRAY['tasa', 'no show', 'porcentaje', 'periodo'],
+  ARRAY['tasa', 'no show', 'porcentaje', 'periodo'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'calculate_no_show_rate',
+  ARRAY['owner']
+),
+
+-- 97. enviar_recordatorio_previo
+(
+  'enviar_recordatorio_previo',
+  'FEATURES.NO_SHOWS',
+  'Enviar recordatorio para reducir no-shows',
+  ARRAY['recordatorio', 'recordar', 'avisar', 'cita'],
+  ARRAY['recordatorio', 'recordar', 'avisar', 'cita'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "hours_before": {"type": "integer", "required": false}}'::jsonb,
+  'send_reminder',
+  ARRAY['owner']
+),
+
+-- 98. bloquear_cliente_temporal
+(
+  'bloquear_cliente_temporal',
+  'FEATURES.NO_SHOWS',
+  'Bloquear cliente temporalmente por exceso de no-shows',
+  ARRAY['bloquear', 'suspender', 'cliente', 'temporal'],
+  ARRAY['bloquear', 'suspender', 'cliente', 'temporal'],
+  '{"profile_id": {"type": "uuid", "required": true}, "days": {"type": "integer", "required": true}, "reason": {"type": "string", "required": false}}'::jsonb,
+  'block_client_temporary',
+  ARRAY['owner']
+),
+
+-- ===================================================
+-- DUAL_MODE (10 herramientas)
+-- ===================================================
+
+-- 99. buscar_slots_dual_mode
+(
+  'buscar_slots_dual_mode',
+  'FEATURES.DUAL_MODE',
+  'Buscar disponibilidad para 2 personas simultáneamente',
+  ARRAY['dual', 'dos personas', 'pareja', 'juntos', 'simultaneo'],
+  ARRAY['dual', 'dos personas', 'pareja', 'juntos', 'simultaneo'],
+  '{"service_id": {"type": "uuid", "required": true}, "start_date": {"type": "timestamp", "required": true}, "end_date": {"type": "timestamp", "required": true}}'::jsonb,
+  'get_available_slots_dual_mode',
+  ARRAY['lead', 'owner']
+),
+
+-- 100. crear_cita_dual_mode
+(
+  'crear_cita_dual_mode',
+  'FEATURES.DUAL_MODE',
+  'Crear 2 citas simultáneas para 2 personas',
+  ARRAY['crear', 'dual', 'dos citas', 'pareja', 'simultaneas'],
+  ARRAY['crear', 'dual', 'dos citas', 'pareja', 'simultaneas'],
+  '{"profile_id_1": {"type": "uuid", "required": true}, "profile_id_2": {"type": "uuid", "required": true}, "service_id": {"type": "uuid", "required": true}, "datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'create_appointment_dual_mode',
+  ARRAY['lead', 'owner']
+),
+
+-- 101. verificar_capacidad_dual
+(
+  'verificar_capacidad_dual',
+  'FEATURES.DUAL_MODE',
+  'Verificar si hay capacidad para servicio dual',
+  ARRAY['capacidad', 'dual', 'verificar', 'disponible'],
+  ARRAY['capacidad', 'dual', 'verificar', 'disponible'],
+  '{"service_id": {"type": "uuid", "required": true}, "datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'check_dual_capacity',
+  ARRAY['lead', 'owner']
+),
+
+-- 102. listar_citas_duales
+(
+  'listar_citas_duales',
+  'FEATURES.DUAL_MODE',
+  'Ver todas las citas en modo dual',
+  ARRAY['listar', 'citas', 'duales', 'parejas'],
+  ARRAY['listar', 'citas', 'duales', 'parejas'],
+  '{"start_date": {"type": "date", "required": false}, "end_date": {"type": "date", "required": false}}'::jsonb,
+  'list_dual_appointments',
+  ARRAY['owner']
+),
+
+-- 103. cancelar_cita_dual
+(
+  'cancelar_cita_dual',
+  'FEATURES.DUAL_MODE',
+  'Cancelar ambas citas de un servicio dual',
+  ARRAY['cancelar', 'dual', 'ambas', 'pareja'],
+  ARRAY['cancelar', 'dual', 'ambas', 'pareja'],
+  '{"appointment_id": {"type": "uuid", "required": true}}'::jsonb,
+  'cancel_dual_appointment',
+  ARRAY['lead', 'owner']
+),
+
+-- 104. reagendar_cita_dual
+(
+  'reagendar_cita_dual',
+  'FEATURES.DUAL_MODE',
+  'Reagendar ambas citas de un servicio dual',
+  ARRAY['reagendar', 'dual', 'ambas', 'pareja', 'mover'],
+  ARRAY['reagendar', 'dual', 'ambas', 'pareja', 'mover'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "new_datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'reschedule_dual_appointment',
+  ARRAY['lead', 'owner']
+),
+
+-- 105. servicios_disponibles_dual
+(
+  'servicios_disponibles_dual',
+  'FEATURES.DUAL_MODE',
+  'Listar servicios que permiten modo dual',
+  ARRAY['servicios', 'dual', 'disponibles', 'pareja'],
+  ARRAY['servicios', 'dual', 'disponibles', 'pareja'],
+  '{}'::jsonb,
+  'get_dual_enabled_services',
+  ARRAY['lead', 'owner']
+),
+
+-- 106. activar_dual_servicio
+(
+  'activar_dual_servicio',
+  'FEATURES.DUAL_MODE',
+  'Activar modo dual para un servicio',
+  ARRAY['activar', 'dual', 'servicio', 'habilitar'],
+  ARRAY['activar', 'dual', 'servicio', 'habilitar'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'enable_dual_mode_service',
+  ARRAY['owner']
+),
+
+-- 107. desactivar_dual_servicio
+(
+  'desactivar_dual_servicio',
+  'FEATURES.DUAL_MODE',
+  'Desactivar modo dual para un servicio',
+  ARRAY['desactivar', 'dual', 'servicio', 'deshabilitar'],
+  ARRAY['desactivar', 'dual', 'servicio', 'deshabilitar'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'disable_dual_mode_service',
+  ARRAY['owner']
+),
+
+-- 108. estadisticas_dual
+(
+  'estadisticas_dual',
+  'FEATURES.DUAL_MODE',
+  'Ver estadísticas de uso de modo dual',
+  ARRAY['estadisticas', 'dual', 'metricas', 'uso'],
+  ARRAY['estadisticas', 'dual', 'metricas', 'uso'],
+  '{"start_date": {"type": "date", "required": false}, "end_date": {"type": "date", "required": false}}'::jsonb,
+  'get_dual_mode_statistics',
+  ARRAY['owner']
+),
+
+-- ===================================================
+-- REVIEWS (5 herramientas)
+-- ===================================================
+
+-- 109. crear_resena
+(
+  'crear_resena',
+  'FEATURES.REVIEWS',
+  'Crear reseña de un servicio',
+  ARRAY['resena', 'valoracion', 'opinion', 'calificar', 'review'],
+  ARRAY['resena', 'valoracion', 'opinion', 'calificar', 'review'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "rating": {"type": "integer", "required": true}, "comment": {"type": "string", "required": false}}'::jsonb,
+  'create_review',
+  ARRAY['lead', 'owner']
+),
+
+-- 110. consultar_resenas_servicio
+(
+  'consultar_resenas_servicio',
+  'FEATURES.REVIEWS',
+  'Ver reseñas de un servicio específico',
+  ARRAY['resenas', 'servicio', 'opiniones', 'valoraciones'],
+  ARRAY['resenas', 'servicio', 'opiniones', 'valoraciones'],
+  '{"service_id": {"type": "uuid", "required": true}, "limit": {"type": "integer", "required": false}}'::jsonb,
+  'get_service_reviews',
+  ARRAY['lead', 'owner']
+),
+
+-- 111. promedio_valoracion_servicio
+(
+  'promedio_valoracion_servicio',
+  'FEATURES.REVIEWS',
+  'Calcular valoración promedio de un servicio',
+  ARRAY['promedio', 'valoracion', 'rating', 'servicio'],
+  ARRAY['promedio', 'valoracion', 'rating', 'servicio'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_average_rating',
+  ARRAY['lead', 'owner']
+),
+
+-- 112. solicitar_feedback
+(
+  'solicitar_feedback',
+  'FEATURES.REVIEWS',
+  'Solicitar feedback post-servicio a cliente',
+  ARRAY['solicitar', 'feedback', 'opinion', 'valoracion'],
+  ARRAY['solicitar', 'feedback', 'opinion', 'valoracion'],
+  '{"appointment_id": {"type": "uuid", "required": true}}'::jsonb,
+  'request_feedback',
+  ARRAY['owner']
+),
+
+-- 113. listar_servicios_mejor_valorados
+(
+  'listar_servicios_mejor_valorados',
+  'FEATURES.REVIEWS',
+  'Listar servicios con mejores valoraciones',
+  ARRAY['mejor valorados', 'top', 'mejores', 'rating', 'servicios'],
+  ARRAY['mejor valorados', 'top', 'mejores', 'rating', 'servicios'],
+  '{"limit": {"type": "integer", "required": false}}'::jsonb,
+  'get_top_rated_services',
+  ARRAY['lead', 'owner']
+);
+
+COMMIT;
+
+-- ===================================================
+-- VERIFICACIÓN
+-- ===================================================
+
+DO $$
+DECLARE
+  v_count_waitlist int;
+  v_count_packages int;
+  v_count_analytics int;
+  v_count_inventory int;
+  v_count_no_shows int;
+  v_count_dual int;
+  v_count_reviews int;
+  v_total int;
+BEGIN
+  SELECT COUNT(*) INTO v_count_waitlist FROM global_tool_definitions WHERE tool_category = 'FEATURES.WAITLIST';
+  SELECT COUNT(*) INTO v_count_packages FROM global_tool_definitions WHERE tool_category = 'FEATURES.PACKAGES';
+  SELECT COUNT(*) INTO v_count_analytics FROM global_tool_definitions WHERE tool_category = 'FEATURES.ANALYTICS';
+  SELECT COUNT(*) INTO v_count_inventory FROM global_tool_definitions WHERE tool_category = 'FEATURES.INVENTORY';
+  SELECT COUNT(*) INTO v_count_no_shows FROM global_tool_definitions WHERE tool_category = 'FEATURES.NO_SHOWS';
+  SELECT COUNT(*) INTO v_count_dual FROM global_tool_definitions WHERE tool_category = 'FEATURES.DUAL_MODE';
+  SELECT COUNT(*) INTO v_count_reviews FROM global_tool_definitions WHERE tool_category = 'FEATURES.REVIEWS';
+  
+  v_total := v_count_waitlist + v_count_packages + v_count_analytics + v_count_inventory + v_count_no_shows + v_count_dual + v_count_reviews;
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '════════════════════════════════════════════════════════════';
+  RAISE NOTICE '✅ SEED PARTE 2 COMPLETADO';
+  RAISE NOTICE '════════════════════════════════════════════════════════════';
+  RAISE NOTICE '';
+  RAISE NOTICE '📊 Herramientas FEATURES insertadas:';
+  RAISE NOTICE '   Waitlist: %', v_count_waitlist;
+  RAISE NOTICE '   Packages: %', v_count_packages;
+  RAISE NOTICE '   Analytics: %', v_count_analytics;
+  RAISE NOTICE '   Inventory: %', v_count_inventory;
+  RAISE NOTICE '   No Shows: %', v_count_no_shows;
+  RAISE NOTICE '   Dual Mode: %', v_count_dual;
+  RAISE NOTICE '   Reviews: %', v_count_reviews;
+  RAISE NOTICE '   TOTAL: %', v_total;
+  RAISE NOTICE '';
+  RAISE NOTICE '🔜 SIGUIENTE PASO:';
+  RAISE NOTICE '   Aplicar: SEED_PARTE_3_OWNER_44_tools.sql';
+  RAISE NOTICE '';
+  RAISE NOTICE '════════════════════════════════════════════════════════════';
+END $$;
