@@ -1,0 +1,133 @@
+-- ===============================================
+-- FUNCIÓN FALTANTE: get_or_create_client_whatsapp
+-- Obtener o crear perfil de cliente desde WhatsApp
+-- ===============================================
+
+BEGIN;
+
+-- Drop si existe
+DROP FUNCTION IF EXISTS public.get_or_create_client_whatsapp(text, text, text) CASCADE;
+
+-- Crear función
+CREATE OR REPLACE FUNCTION public.get_or_create_client_whatsapp(
+  p_phone_number text,
+  p_name text DEFAULT NULL,
+  p_email text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_profile_id uuid;
+  v_result jsonb;
+  v_created boolean := false;
+BEGIN
+  -- Obtener contexto del negocio
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Normalizar número de teléfono (quitar espacios)
+  p_phone_number := regexp_replace(p_phone_number, '\s+', '', 'g');
+  
+  -- Buscar perfil existente
+  SELECT id INTO v_profile_id
+  FROM public.profiles
+  WHERE business_id = v_business_id
+    AND phone_number = p_phone_number
+  LIMIT 1;
+  
+  -- Si no existe, crear nuevo perfil
+  IF v_profile_id IS NULL THEN
+    INSERT INTO public.profiles (
+      business_id,
+      phone_number,
+      name,
+      email,
+      role,
+      metadata
+    ) VALUES (
+      v_business_id,
+      p_phone_number,
+      COALESCE(p_name, 'Cliente WhatsApp'),
+      p_email,
+      'lead',
+      jsonb_build_object(
+        'source', 'whatsapp',
+        'created_by_bot', true,
+        'created_at', now()
+      )
+    )
+    RETURNING id INTO v_profile_id;
+    
+    v_created := true;
+    
+    -- Log de auditoría
+    INSERT INTO public.audit_logs (
+      business_id,
+      profile_id,
+      action,
+      payload
+    ) VALUES (
+      v_business_id,
+      v_profile_id,
+      'client_created_whatsapp',
+      jsonb_build_object(
+        'phone', p_phone_number,
+        'name', p_name,
+        'source', 'bot'
+      )
+    );
+  ELSE
+    -- Si existe pero no tiene nombre y se proporciona uno, actualizar
+    IF p_name IS NOT NULL THEN
+      UPDATE public.profiles
+      SET 
+        name = COALESCE(NULLIF(name, 'Cliente WhatsApp'), p_name),
+        email = COALESCE(email, p_email),
+        updated_at = now()
+      WHERE id = v_profile_id;
+    END IF;
+  END IF;
+  
+  -- Obtener datos completos del perfil
+  SELECT jsonb_build_object(
+    'profile_id', p.id,
+    'phone_number', p.phone_number,
+    'name', p.name,
+    'email', p.email,
+    'role', p.role,
+    'created', v_created,
+    'metadata', p.metadata
+  )
+  INTO v_result
+  FROM public.profiles p
+  WHERE p.id = v_profile_id;
+  
+  RETURN v_result;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_or_create_client_whatsapp IS
+  'Obtener perfil existente o crear nuevo cliente desde WhatsApp. Retorna JSON con datos del perfil.';
+
+-- Permisos
+GRANT EXECUTE ON FUNCTION public.get_or_create_client_whatsapp(text, text, text) TO authenticated;
+
+COMMIT;
+
+-- Verificación
+DO $$
+BEGIN
+  RAISE NOTICE '';
+  RAISE NOTICE '✅ Función get_or_create_client_whatsapp creada';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Uso:';
+  RAISE NOTICE '  SELECT get_or_create_client_whatsapp(''+34600123456'', ''María García'', ''maria@email.com'');';
+  RAISE NOTICE '';
+END $$;
