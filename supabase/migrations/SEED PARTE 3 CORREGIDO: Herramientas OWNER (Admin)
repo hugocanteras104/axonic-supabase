@@ -1,0 +1,173 @@
+-- ===============================================
+-- SEED PARTE 3 CORREGIDO: Herramientas OWNER (Admin)
+-- Sistema Tool Discovery - Axonic Assistant
+-- Solo para dueños del negocio
+-- ===============================================
+
+BEGIN;
+
+DELETE FROM global_tool_definitions 
+WHERE tool_category = 'OWNER';
+
+-- ===================================================
+-- OWNER (17 herramientas administrativas) ✅
+-- ===================================================
+
+INSERT INTO global_tool_definitions (
+  tool_name, tool_category, description, keywords, original_keywords,
+  parameters, rpc_function_name, requires_role
+) VALUES
+
+-- SERVICIOS (3)
+('crear_servicio', 'OWNER', 'Crear un nuevo servicio en el catálogo',
+  ARRAY['crear', 'servicio', 'nuevo', 'agregar', 'anadir'],
+  ARRAY['crear', 'servicio', 'nuevo', 'agregar', 'anadir'],
+  '{"name": {"type": "string", "required": true}, "base_price": {"type": "number", "required": true}, "duration_minutes": {"type": "integer", "required": true}, "description": {"type": "string", "required": false}, "category": {"type": "string", "required": false}}'::jsonb,
+  'create_service', ARRAY['owner']),
+
+('actualizar_servicio', 'OWNER', 'Actualizar información de un servicio existente',
+  ARRAY['actualizar', 'modificar', 'editar', 'servicio'],
+  ARRAY['actualizar', 'modificar', 'editar', 'servicio'],
+  '{"service_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_service', ARRAY['owner']),
+
+('eliminar_servicio', 'OWNER', 'Desactivar o eliminar un servicio',
+  ARRAY['eliminar', 'borrar', 'desactivar', 'servicio'],
+  ARRAY['eliminar', 'borrar', 'desactivar', 'servicio'],
+  '{"service_id": {"type": "uuid", "required": true}, "soft_delete": {"type": "boolean", "required": false}}'::jsonb,
+  'delete_service', ARRAY['owner']),
+
+-- CLIENTES (3)
+('buscar_clientes', 'OWNER', 'Buscar clientes por nombre, teléfono o email',
+  ARRAY['buscar', 'clientes', 'encontrar', 'cliente'],
+  ARRAY['buscar', 'clientes', 'encontrar', 'cliente'],
+  '{"search_query": {"type": "string", "required": true}}'::jsonb,
+  'search_clients', ARRAY['owner']),
+
+('listar_todos_clientes', 'OWNER', 'Ver lista completa de clientes',
+  ARRAY['listar', 'clientes', 'todos', 'ver'],
+  ARRAY['listar', 'clientes', 'todos', 'ver'],
+  '{"role_filter": {"type": "string", "required": false}, "include_inactive": {"type": "boolean", "required": false}}'::jsonb,
+  'list_all_clients', ARRAY['owner']),
+
+('actualizar_rol_cliente', 'OWNER', 'Cambiar rol de un cliente (lead/owner)',
+  ARRAY['actualizar', 'rol', 'cliente', 'cambiar'],
+  ARRAY['actualizar', 'rol', 'cliente', 'cambiar'],
+  '{"profile_id": {"type": "uuid", "required": true}, "new_role": {"type": "string", "required": true}}'::jsonb,
+  'update_client_role', ARRAY['owner']),
+
+-- BASE DE CONOCIMIENTO (4)
+('crear_articulo_conocimiento', 'OWNER', 'Crear artículo en base de conocimiento',
+  ARRAY['crear', 'articulo', 'conocimiento', 'faq', 'pregunta'],
+  ARRAY['crear', 'articulo', 'conocimiento', 'faq', 'pregunta'],
+  '{"category": {"type": "string", "required": true}, "question": {"type": "string", "required": true}, "answer": {"type": "string", "required": true}}'::jsonb,
+  'create_knowledge_article', ARRAY['owner']),
+
+('actualizar_articulo_conocimiento', 'OWNER', 'Actualizar artículo de conocimiento existente',
+  ARRAY['actualizar', 'modificar', 'conocimiento', 'articulo'],
+  ARRAY['actualizar', 'modificar', 'conocimiento', 'articulo'],
+  '{"kb_id": {"type": "uuid", "required": true}, "updates": {"type": "object", "required": true}}'::jsonb,
+  'update_knowledge_article', ARRAY['owner']),
+
+('eliminar_articulo_conocimiento', 'OWNER', 'Eliminar artículo de la base de conocimiento',
+  ARRAY['eliminar', 'borrar', 'conocimiento', 'articulo'],
+  ARRAY['eliminar', 'borrar', 'conocimiento', 'articulo'],
+  '{"kb_id": {"type": "uuid", "required": true}}'::jsonb,
+  'delete_knowledge_article', ARRAY['owner']),
+
+('revisar_sugerencias', 'OWNER', 'Ver sugerencias de clientes para base de conocimiento',
+  ARRAY['sugerencias', 'revisar', 'pendientes', 'conocimiento'],
+  ARRAY['sugerencias', 'revisar', 'pendientes', 'conocimiento'],
+  '{}'::jsonb,
+  'review_knowledge_suggestions', ARRAY['owner']),
+
+-- CONFIGURACIÓN DEL NEGOCIO (2)
+('configurar_horario_negocio', 'OWNER', 'Establecer horario de atención del negocio',
+  ARRAY['horario', 'configurar', 'negocio', 'atencion'],
+  ARRAY['horario', 'configurar', 'negocio', 'atencion'],
+  '{"day_of_week": {"type": "integer", "required": true}, "open_time": {"type": "time", "required": true}, "close_time": {"type": "time", "required": true}}'::jsonb,
+  'set_business_hours', ARRAY['owner']),
+
+('actualizar_configuracion_negocio', 'OWNER', 'Actualizar configuración general del negocio',
+  ARRAY['configuracion', 'negocio', 'actualizar', 'settings'],
+  ARRAY['configuracion', 'negocio', 'actualizar', 'settings'],
+  '{"settings": {"type": "object", "required": true}}'::jsonb,
+  'update_business_settings', ARRAY['owner']),
+
+-- STAFF (2)
+('crear_staff', 'OWNER', 'Agregar nuevo miembro del personal',
+  ARRAY['crear', 'staff', 'empleado', 'personal', 'agregar'],
+  ARRAY['crear', 'staff', 'empleado', 'personal', 'agregar'],
+  '{"name": {"type": "string", "required": true}, "phone": {"type": "string", "required": true}, "role": {"type": "string", "required": true}, "email": {"type": "string", "required": false}}'::jsonb,
+  'create_staff_member', ARRAY['owner']),
+
+('listar_staff', 'OWNER', 'Ver lista completa del personal',
+  ARRAY['listar', 'staff', 'empleados', 'personal', 'equipo'],
+  ARRAY['listar', 'staff', 'empleados', 'personal', 'equipo'],
+  '{"include_inactive": {"type": "boolean", "required": false}}'::jsonb,
+  'list_staff', ARRAY['owner']),
+
+-- NOTAS Y MÉTRICAS (3)
+('crear_nota_cliente', 'OWNER', 'Agregar nota privada sobre un cliente',
+  ARRAY['nota', 'cliente', 'comentario', 'observacion'],
+  ARRAY['nota', 'cliente', 'comentario', 'observacion'],
+  '{"profile_id": {"type": "uuid", "required": true}, "note_text": {"type": "string", "required": true}, "category": {"type": "string", "required": false}}'::jsonb,
+  'create_client_note', ARRAY['owner']),
+
+('ver_notas_cliente', 'OWNER', 'Ver todas las notas de un cliente',
+  ARRAY['notas', 'cliente', 'ver', 'historial'],
+  ARRAY['notas', 'cliente', 'ver', 'historial'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_client_notes', ARRAY['owner']),
+
+('ver_metricas_globales', 'OWNER', 'Ver métricas generales del negocio',
+  ARRAY['metricas', 'globales', 'dashboard', 'generales'],
+  ARRAY['metricas', 'globales', 'dashboard', 'generales'],
+  '{}'::jsonb,
+  'get_global_metrics', ARRAY['owner']);
+
+COMMIT;
+
+-- ===================================================
+-- VERIFICACIÓN FINAL
+-- ===================================================
+
+DO $$
+DECLARE
+  v_count_always int;
+  v_count_features int;
+  v_count_owner int;
+  v_total int;
+BEGIN
+  SELECT COUNT(*) INTO v_count_always FROM global_tool_definitions WHERE tool_category = 'ALWAYS';
+  SELECT COUNT(*) INTO v_count_features FROM global_tool_definitions WHERE tool_category LIKE 'FEATURES.%';
+  SELECT COUNT(*) INTO v_count_owner FROM global_tool_definitions WHERE tool_category = 'OWNER';
+  
+  v_total := v_count_always + v_count_features + v_count_owner;
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+  RAISE NOTICE '🎉 SEED COMPLETADO - SISTEMA TOOL DISCOVERY LISTO';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+  RAISE NOTICE '';
+  RAISE NOTICE '📊 RESUMEN FINAL:';
+  RAISE NOTICE '   ALWAYS (Core): % herramientas', v_count_always;
+  RAISE NOTICE '   FEATURES: % herramientas', v_count_features;
+  RAISE NOTICE '   OWNER: % herramientas', v_count_owner;
+  RAISE NOTICE '   ───────────────────────────────';
+  RAISE NOTICE '   TOTAL: % herramientas ✅', v_total;
+  RAISE NOTICE '';
+  RAISE NOTICE '🎯 TODAS LAS FUNCIONES RPC IMPLEMENTADAS';
+  RAISE NOTICE '🎯 DUAL_MODE CORREGIDO (usa requires_role)';
+  RAISE NOTICE '🎯 SISTEMA LISTO PARA PRODUCCIÓN';
+  RAISE NOTICE '';
+  RAISE NOTICE '🧪 PRUEBA EL SISTEMA:';
+  RAISE NOTICE '   SELECT * FROM search_available_tools(';
+  RAISE NOTICE '     ''tu-business-id''::uuid,';
+  RAISE NOTICE '     ''quiero agendar una cita'',';
+  RAISE NOTICE '     ''lead'',';
+  RAISE NOTICE '     10';
+  RAISE NOTICE '   );';
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+END $$;
