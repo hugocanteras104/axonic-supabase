@@ -1,0 +1,495 @@
+-- ===============================================
+-- MIGRATION FIXED - Drops existing functions first
+-- ===============================================
+
+BEGIN;
+
+-- Drop all functions that might exist
+DO $$ 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT proname, oidvectortypes(proargtypes) as args
+        FROM pg_proc 
+        WHERE pronamespace = 'public'::regnamespace
+        AND proname IN (
+            'get_or_create_client_whatsapp', 'get_client_profile', 'update_client_profile',
+            'count_client_appointments', 'can_client_book', 'get_preferred_contact_method',
+            'has_appointment_next_24h', 'get_service_price', 'get_service_duration',
+            'get_service_details', 'search_services', 'get_services_by_category',
+            'get_services_by_price_range', 'check_service_active', 'get_top_services',
+            'calculate_total_duration', 'check_day_availability', 'get_business_hours',
+            'get_cancellation_policy', 'get_popular_questions', 'create_knowledge_suggestion',
+            'send_client_message', 'get_service_recommendations', 'get_cross_sell_recommendations',
+            'check_slot_available', 'add_to_waitlist', 'get_waitlist_position',
+            'get_next_waitlist_client', 'remove_from_waitlist', 'convert_waitlist_to_appointment',
+            'list_waitlist_by_service', 'update_waitlist_priority', 'get_client_packages',
+            'check_package_sessions_remaining', 'list_available_packages', 'check_package_validity',
+            'get_package_usage_history', 'get_inventory_item', 'list_all_inventory',
+            'add_inventory_item', 'update_inventory_quantity', 'register_product_sale',
+            'get_low_stock_items', 'get_out_of_stock_items', 'search_inventory',
+            'get_total_inventory_value', 'get_revenue_by_period', 'get_appointments_by_status',
+            'get_top_clients', 'get_cancellation_rate', 'get_no_show_stats',
+            'create_service', 'update_service', 'delete_service', 'search_clients',
+            'list_all_clients', 'update_client_role', 'create_knowledge_article',
+            'update_knowledge_article', 'delete_knowledge_article', 'review_knowledge_suggestions',
+            'set_business_hours', 'update_business_settings', 'create_staff_member',
+            'list_staff', 'create_client_note', 'get_client_notes', 'get_global_metrics'
+        )
+    ) LOOP
+        EXECUTE 'DROP FUNCTION IF EXISTS public.' || r.proname || '(' || r.args || ') CASCADE';
+    END LOOP;
+END $$;
+
+BEGIN;
+
+-- ===============================================
+-- 1. get_or_create_client_whatsapp
+-- Obtener o crear perfil de cliente usando WhatsApp
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_or_create_client_whatsapp(
+  p_phone text
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_profile_id uuid;
+  v_clean_phone text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Limpiar número de teléfono (remover espacios, guiones, etc)
+  v_clean_phone := regexp_replace(p_phone, '[^0-9+]', '', 'g');
+  
+  -- Buscar perfil existente
+  SELECT id INTO v_profile_id
+  FROM public.profiles
+  WHERE business_id = v_business_id
+    AND phone_number = v_clean_phone;
+  
+  -- Si existe, retornarlo
+  IF FOUND THEN
+    RETURN v_profile_id;
+  END IF;
+  
+  -- Si no existe, crear nuevo perfil
+  INSERT INTO public.profiles (
+    business_id,
+    phone_number,
+    role,
+    is_active
+  ) VALUES (
+    v_business_id,
+    v_clean_phone,
+    'lead',
+    true
+  )
+  RETURNING id INTO v_profile_id;
+  
+  -- Log de auditoría
+  INSERT INTO public.audit_logs (business_id, profile_id, action, payload)
+  VALUES (
+    v_business_id,
+    v_profile_id,
+    'client_created_whatsapp',
+    jsonb_build_object(
+      'phone', v_clean_phone,
+      'source', 'whatsapp_bot'
+    )
+  );
+  
+  RETURN v_profile_id;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_or_create_client_whatsapp IS
+  'Obtener o crear perfil de cliente usando número de WhatsApp';
+
+-- ===============================================
+-- 2. get_client_profile
+-- Obtener información del perfil del cliente
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_client_profile(
+  p_profile_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+  v_role text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_build_object(
+    'profile_id', p.id,
+    'full_name', p.full_name,
+    'phone_number', p.phone_number,
+    'email', p.email,
+    'role', p.role,
+    'is_active', p.is_active,
+    'preferences', p.preferences,
+    'metadata', p.metadata,
+    'created_at', p.created_at,
+    'stats', jsonb_build_object(
+      'total_appointments', (
+        SELECT COUNT(*) 
+        FROM appointments 
+        WHERE profile_id = p.id AND business_id = v_business_id
+      ),
+      'completed_appointments', (
+        SELECT COUNT(*) 
+        FROM appointments 
+        WHERE profile_id = p.id 
+          AND business_id = v_business_id 
+          AND status = 'completed'
+      ),
+      'cancelled_appointments', (
+        SELECT COUNT(*) 
+        FROM appointments 
+        WHERE profile_id = p.id 
+          AND business_id = v_business_id 
+          AND status = 'cancelled'
+      )
+    )
+  )
+  INTO v_result
+  FROM public.profiles p
+  WHERE p.id = p_profile_id
+    AND p.business_id = v_business_id;
+  
+  IF v_result IS NULL THEN
+    RAISE EXCEPTION 'Profile not found';
+  END IF;
+  
+  RETURN v_result;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_client_profile IS
+  'Obtener información completa del perfil del cliente con estadísticas';
+
+-- ===============================================
+-- 3. update_client_profile
+-- Actualizar información del perfil del cliente
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.update_client_profile(
+  p_profile_id uuid,
+  p_full_name text DEFAULT NULL,
+  p_email text DEFAULT NULL,
+  p_preferences jsonb DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_role text;
+  v_user_id uuid;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  BEGIN
+    v_user_id := (auth.jwt()->>'sub')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    v_user_id := NULL;
+  END;
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Verificar que el perfil existe
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = p_profile_id
+      AND business_id = v_business_id
+  ) THEN
+    RAISE EXCEPTION 'Profile not found';
+  END IF;
+  
+  -- Verificar permisos (lead solo puede actualizar su propio perfil)
+  IF v_role = 'lead' AND p_profile_id != v_user_id THEN
+    RAISE EXCEPTION 'Cannot update profiles of other clients';
+  END IF;
+  
+  -- Actualizar campos (solo si se proporcionan)
+  UPDATE public.profiles
+  SET
+    full_name = COALESCE(p_full_name, full_name),
+    email = COALESCE(p_email, email),
+    preferences = COALESCE(p_preferences, preferences),
+    updated_at = now()
+  WHERE id = p_profile_id
+    AND business_id = v_business_id;
+  
+  -- Log de auditoría
+  INSERT INTO public.audit_logs (business_id, profile_id, action, payload)
+  VALUES (
+    v_business_id,
+    p_profile_id,
+    'profile_updated',
+    jsonb_build_object(
+      'updated_fields', jsonb_build_object(
+        'full_name', p_full_name IS NOT NULL,
+        'email', p_email IS NOT NULL,
+        'preferences', p_preferences IS NOT NULL
+      )
+    )
+  );
+  
+  RETURN jsonb_build_object(
+    'success', true,
+    'profile_id', p_profile_id,
+    'message', 'Profile updated successfully'
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.update_client_profile IS
+  'Actualizar información del perfil del cliente';
+
+-- ===============================================
+-- 4. count_client_appointments
+-- Contar total de citas de un cliente
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.count_client_appointments(
+  p_profile_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_total int;
+  v_confirmed int;
+  v_completed int;
+  v_cancelled int;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT 
+    COUNT(*),
+    COUNT(*) FILTER (WHERE status = 'confirmed'),
+    COUNT(*) FILTER (WHERE status = 'completed'),
+    COUNT(*) FILTER (WHERE status = 'cancelled')
+  INTO v_total, v_confirmed, v_completed, v_cancelled
+  FROM public.appointments
+  WHERE profile_id = p_profile_id
+    AND business_id = v_business_id;
+  
+  RETURN jsonb_build_object(
+    'profile_id', p_profile_id,
+    'total', v_total,
+    'confirmed', v_confirmed,
+    'completed', v_completed,
+    'cancelled', v_cancelled
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.count_client_appointments IS
+  'Contar total de citas de un cliente por estado';
+
+-- ===============================================
+-- 5. can_client_book
+-- Verificar si cliente puede agendar (sin bloqueos)
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.can_client_book(
+  p_profile_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_profile RECORD;
+  v_can_book boolean := true;
+  v_reasons text[] := ARRAY[]::text[];
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Obtener perfil
+  SELECT * INTO v_profile
+  FROM public.profiles
+  WHERE id = p_profile_id
+    AND business_id = v_business_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Profile not found';
+  END IF;
+  
+  -- Verificar si está activo
+  IF NOT v_profile.is_active THEN
+    v_can_book := false;
+    v_reasons := array_append(v_reasons, 'Profile is inactive');
+  END IF;
+  
+  -- Verificar si tiene citas no pagadas (si aplica)
+  -- Esta lógica se puede expandir según reglas del negocio
+  
+  RETURN jsonb_build_object(
+    'can_book', v_can_book,
+    'profile_id', p_profile_id,
+    'reasons', v_reasons
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.can_client_book IS
+  'Verificar si un cliente puede agendar citas';
+
+-- ===============================================
+-- 6. get_preferred_contact_method
+-- Obtener método de contacto preferido del cliente
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_preferred_contact_method(
+  p_profile_id uuid
+)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_method text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT preferences->>'contact_method'
+  INTO v_method
+  FROM public.profiles
+  WHERE id = p_profile_id
+    AND business_id = v_business_id;
+  
+  RETURN COALESCE(v_method, 'whatsapp');
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_preferred_contact_method IS
+  'Obtener método de contacto preferido del cliente';
+
+-- ===============================================
+-- 7. has_appointment_next_24h
+-- Verificar si cliente tiene cita en próximas 24h
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.has_appointment_next_24h(
+  p_profile_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_appointment RECORD;
+  v_has_appointment boolean;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT 
+    a.id,
+    a.start_time,
+    s.name as service_name
+  INTO v_appointment
+  FROM public.appointments a
+  JOIN public.services s ON s.id = a.service_id
+  WHERE a.profile_id = p_profile_id
+    AND a.business_id = v_business_id
+    AND a.status = 'confirmed'
+    AND a.start_time BETWEEN now() AND now() + interval '24 hours'
+  ORDER BY a.start_time ASC
+  LIMIT 1;
+  
+  v_has_appointment := FOUND;
+  
+  RETURN jsonb_build_object(
+    'has_appointment', v_has_appointment,
+    'appointment', CASE 
+      WHEN v_has_appointment THEN jsonb_build_object(
+        'id', v_appointment.id,
+        'start_time', v_appointment.start_time,
+        'service_name', v_appointment.service_name
+      )
+      ELSE null
+    END
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.has_appointment_next_24h IS
+  'Verificar si cliente tiene cita en las próximas 24 horas';
+
+-- ===============================================
+-- GRANTS
+-- ===============================================
+GRANT EXECUTE ON FUNCTION public.get_or_create_client_whatsapp(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_client_profile(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_client_profile(uuid, text, text, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.count_client_appointments(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.can_client_book(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_preferred_contact_method(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_appointment_next_24h(uuid) TO authenticated;
+
+COMMIT;
+
+-- Verificación
+DO $$
+BEGIN
+  RAISE NOTICE '✅ Migration 0301 completed successfully';
+  RAISE NOTICE '📦 Functions created: 7';
+  RAISE NOTICE '   - get_or_create_client_whatsapp';
+  RAISE NOTICE '   - get_client_profile';
+  RAISE NOTICE '   - update_client_profile';
+  RAISE NOTICE '   - count_client_appointments';
+  RAISE NOTICE '   - can_client_book';
+  RAISE NOTICE '   - get_preferred_contact_method';
+  RAISE NOTICE '   - has_appointment_next_24h';
+END $$;
