@@ -1,0 +1,499 @@
+-- ===============================================
+-- MIGRATION FIXED - Drops existing functions first
+-- ===============================================
+
+BEGIN;
+
+-- Drop all functions that might exist
+DO $$ 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT proname, oidvectortypes(proargtypes) as args
+        FROM pg_proc 
+        WHERE pronamespace = 'public'::regnamespace
+        AND proname IN (
+            'get_or_create_client_whatsapp', 'get_client_profile', 'update_client_profile',
+            'count_client_appointments', 'can_client_book', 'get_preferred_contact_method',
+            'has_appointment_next_24h', 'get_service_price', 'get_service_duration',
+            'get_service_details', 'search_services', 'get_services_by_category',
+            'get_services_by_price_range', 'check_service_active', 'get_top_services',
+            'calculate_total_duration', 'check_day_availability', 'get_business_hours',
+            'get_cancellation_policy', 'get_popular_questions', 'create_knowledge_suggestion',
+            'send_client_message', 'get_service_recommendations', 'get_cross_sell_recommendations',
+            'check_slot_available', 'add_to_waitlist', 'get_waitlist_position',
+            'get_next_waitlist_client', 'remove_from_waitlist', 'convert_waitlist_to_appointment',
+            'list_waitlist_by_service', 'update_waitlist_priority', 'get_client_packages',
+            'check_package_sessions_remaining', 'list_available_packages', 'check_package_validity',
+            'get_package_usage_history', 'get_inventory_item', 'list_all_inventory',
+            'add_inventory_item', 'update_inventory_quantity', 'register_product_sale',
+            'get_low_stock_items', 'get_out_of_stock_items', 'search_inventory',
+            'get_total_inventory_value', 'get_revenue_by_period', 'get_appointments_by_status',
+            'get_top_clients', 'get_cancellation_rate', 'get_no_show_stats',
+            'create_service', 'update_service', 'delete_service', 'search_clients',
+            'list_all_clients', 'update_client_role', 'create_knowledge_article',
+            'update_knowledge_article', 'delete_knowledge_article', 'review_knowledge_suggestions',
+            'set_business_hours', 'update_business_settings', 'create_staff_member',
+            'list_staff', 'create_client_note', 'get_client_notes', 'get_global_metrics'
+        )
+    ) LOOP
+        EXECUTE 'DROP FUNCTION IF EXISTS public.' || r.proname || '(' || r.args || ') CASCADE';
+    END LOOP;
+END $$;
+
+BEGIN;
+
+-- ===============================================
+-- 1. get_business_hours
+-- Obtener horario de atención del negocio
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_business_hours()
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'day_of_week', day_of_week,
+      'day_name', CASE day_of_week
+        WHEN 0 THEN 'Domingo'
+        WHEN 1 THEN 'Lunes'
+        WHEN 2 THEN 'Martes'
+        WHEN 3 THEN 'Miércoles'
+        WHEN 4 THEN 'Jueves'
+        WHEN 5 THEN 'Viernes'
+        WHEN 6 THEN 'Sábado'
+      END,
+      'open_time', open_time,
+      'close_time', close_time,
+      'is_closed', is_closed
+    ) ORDER BY day_of_week
+  )
+  INTO v_result
+  FROM public.business_hours
+  WHERE business_id = v_business_id;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_business_hours IS
+  'Obtener horario de atención del negocio por día de la semana';
+
+-- ===============================================
+-- 2. get_cancellation_policy
+-- Obtener política de cancelación del negocio
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_cancellation_policy()
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_policy jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT settings->'cancellation_policy'
+  INTO v_policy
+  FROM public.business_settings
+  WHERE business_id = v_business_id;
+  
+  -- Si no existe política, retornar default
+  IF v_policy IS NULL THEN
+    v_policy := jsonb_build_object(
+      'hours_before', 24,
+      'allows_cancellation', true,
+      'policy_text', 'Las cancelaciones deben hacerse con al menos 24 horas de anticipación.'
+    );
+  END IF;
+  
+  RETURN v_policy;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_cancellation_policy IS
+  'Obtener política de cancelación configurada para el negocio';
+
+-- ===============================================
+-- 3. get_popular_questions
+-- Obtener preguntas frecuentes más vistas
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_popular_questions(
+  p_limit int DEFAULT 10
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_result jsonb;
+BEGIN
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'id', kb.id,
+      'category', kb.category,
+      'question', kb.question,
+      'answer', kb.answer,
+      'view_count', kb.view_count
+    )
+  )
+  INTO v_result
+  FROM public.knowledge_base kb
+  ORDER BY kb.view_count DESC
+  LIMIT p_limit;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_popular_questions IS
+  'Obtener las preguntas frecuentes más consultadas';
+
+-- ===============================================
+-- 4. create_knowledge_suggestion
+-- Crear sugerencia para la base de conocimiento
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.create_knowledge_suggestion(
+  p_question text,
+  p_context text DEFAULT NULL
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_suggestion_id uuid;
+  v_user_id uuid;
+BEGIN
+  BEGIN
+    v_user_id := (auth.jwt()->>'sub')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    v_user_id := NULL;
+  END;
+  
+  INSERT INTO public.knowledge_suggestions (
+    question_text,
+    context,
+    suggested_by
+  ) VALUES (
+    p_question,
+    p_context,
+    v_user_id
+  )
+  RETURNING id INTO v_suggestion_id;
+  
+  RETURN v_suggestion_id;
+END;
+$$;
+
+COMMENT ON FUNCTION public.create_knowledge_suggestion IS
+  'Crear sugerencia de pregunta para que el owner agregue a la base de conocimiento';
+
+-- ===============================================
+-- 5. send_client_message
+-- Enviar mensaje a cliente (agregar a cola de notificaciones)
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.send_client_message(
+  p_profile_id uuid,
+  p_message text,
+  p_channel text DEFAULT 'whatsapp'
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_notification_id uuid;
+  v_role text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Solo owners pueden enviar mensajes
+  IF v_role != 'owner' THEN
+    RAISE EXCEPTION 'Only owners can send messages to clients';
+  END IF;
+  
+  -- Verificar que el perfil existe
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = p_profile_id
+      AND business_id = v_business_id
+  ) THEN
+    RAISE EXCEPTION 'Profile not found';
+  END IF;
+  
+  -- Agregar a cola de notificaciones
+  INSERT INTO public.notifications_queue (
+    business_id,
+    event_type,
+    payload
+  ) VALUES (
+    v_business_id,
+    'custom_message',
+    jsonb_build_object(
+      'profile_id', p_profile_id,
+      'message', p_message,
+      'channel', p_channel
+    )
+  )
+  RETURNING id INTO v_notification_id;
+  
+  RETURN v_notification_id;
+END;
+$$;
+
+COMMENT ON FUNCTION public.send_client_message IS
+  'Enviar mensaje personalizado a un cliente (solo owners)';
+
+-- ===============================================
+-- 6. get_service_recommendations
+-- Obtener recomendaciones de servicios basadas en historial
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_service_recommendations(
+  p_profile_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Obtener servicios que el cliente aún no ha probado
+  -- pero que son populares o complementarios a lo que ha usado
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'service_id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'base_price', s.base_price,
+      'category', s.category,
+      'reason', 'Popular entre otros clientes'
+    )
+  )
+  INTO v_result
+  FROM public.services s
+  WHERE s.business_id = v_business_id
+    AND s.is_active = true
+    AND NOT EXISTS (
+      SELECT 1 FROM public.appointments a
+      WHERE a.profile_id = p_profile_id
+        AND a.service_id = s.id
+        AND a.status IN ('confirmed', 'completed')
+    )
+  ORDER BY (
+    SELECT COUNT(*) 
+    FROM public.appointments a2 
+    WHERE a2.service_id = s.id 
+      AND a2.status = 'completed'
+  ) DESC
+  LIMIT 5;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_service_recommendations IS
+  'Obtener recomendaciones de servicios personalizadas para el cliente';
+
+-- ===============================================
+-- 7. get_cross_sell_recommendations
+-- Obtener servicios complementarios para venta cruzada
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_cross_sell_recommendations(
+  p_service_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Buscar servicios complementarios definidos en cross_sell_rules
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'service_id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'base_price', s.base_price,
+      'discount_percentage', csr.discount_percentage,
+      'reason', csr.reason
+    )
+  )
+  INTO v_result
+  FROM public.cross_sell_rules csr
+  JOIN public.services s ON s.id = csr.recommended_service_id
+  WHERE csr.business_id = v_business_id
+    AND csr.trigger_service_id = p_service_id
+    AND csr.is_active = true
+    AND s.is_active = true;
+  
+  -- Si no hay reglas específicas, retornar servicios de la misma categoría
+  IF v_result IS NULL THEN
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'service_id', s2.id,
+        'name', s2.name,
+        'description', s2.description,
+        'base_price', s2.base_price,
+        'reason', 'Mismo tipo de tratamiento'
+      )
+    )
+    INTO v_result
+    FROM public.services s1
+    JOIN public.services s2 ON s2.category = s1.category 
+      AND s2.id != s1.id
+    WHERE s1.id = p_service_id
+      AND s1.business_id = v_business_id
+      AND s2.business_id = v_business_id
+      AND s2.is_active = true
+    LIMIT 3;
+  END IF;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_cross_sell_recommendations IS
+  'Obtener servicios complementarios para venta cruzada';
+
+-- ===============================================
+-- 8. check_slot_available
+-- Verificar si un horario específico está disponible
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.check_slot_available(
+  p_service_id uuid,
+  p_datetime timestamptz
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_duration int;
+  v_end_time timestamptz;
+  v_is_available boolean;
+  v_conflict_count int;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  -- Obtener duración del servicio
+  SELECT duration_minutes INTO v_duration
+  FROM public.services
+  WHERE id = p_service_id
+    AND business_id = v_business_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Service not found';
+  END IF;
+  
+  v_end_time := p_datetime + (v_duration || ' minutes')::interval;
+  
+  -- Verificar conflictos
+  SELECT COUNT(*) INTO v_conflict_count
+  FROM public.appointments
+  WHERE service_id = p_service_id
+    AND business_id = v_business_id
+    AND status = 'confirmed'
+    AND tstzrange(start_time, end_time, '[)') && 
+        tstzrange(p_datetime, v_end_time, '[)');
+  
+  v_is_available := (v_conflict_count = 0);
+  
+  RETURN jsonb_build_object(
+    'is_available', v_is_available,
+    'datetime', p_datetime,
+    'end_time', v_end_time,
+    'service_id', p_service_id
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.check_slot_available IS
+  'Verificar si un horario específico está disponible para un servicio';
+
+-- ===============================================
+-- GRANTS
+-- ===============================================
+GRANT EXECUTE ON FUNCTION public.get_business_hours() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_cancellation_policy() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_popular_questions(int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_knowledge_suggestion(text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.send_client_message(uuid, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_service_recommendations(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_cross_sell_recommendations(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_slot_available(uuid, timestamptz) TO authenticated;
+
+COMMIT;
+
+-- Verificación
+DO $$
+BEGIN
+  RAISE NOTICE '✅ Migration 0303 completed successfully';
+  RAISE NOTICE '📦 Functions created: 8';
+  RAISE NOTICE '   - get_business_hours';
+  RAISE NOTICE '   - get_cancellation_policy';
+  RAISE NOTICE '   - get_popular_questions';
+  RAISE NOTICE '   - create_knowledge_suggestion';
+  RAISE NOTICE '   - send_client_message';
+  RAISE NOTICE '   - get_service_recommendations';
+  RAISE NOTICE '   - get_cross_sell_recommendations';
+  RAISE NOTICE '   - check_slot_available';
+END $$;
