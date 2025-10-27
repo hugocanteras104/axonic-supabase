@@ -1,0 +1,527 @@
+-- ===============================================
+-- SEED PARTE 1 CORREGIDO: 40 Herramientas ALWAYS (Core)
+-- Sistema Tool Discovery - Axonic Assistant
+-- ACTUALIZADO con funciones RPC implementadas
+-- ===============================================
+
+BEGIN;
+
+-- Limpiar herramientas anteriores si existen
+DELETE FROM global_tool_definitions 
+WHERE tool_category = 'ALWAYS';
+
+-- ===================================================
+-- ALWAYS (40 Herramientas Core)
+-- Disponibles para: ['lead', 'owner']
+-- ===================================================
+
+INSERT INTO global_tool_definitions (
+  tool_name, tool_category, description, keywords, original_keywords,
+  parameters, rpc_function_name, requires_role
+) VALUES
+
+-- 1. obtener_crear_cliente_whatsapp ✅
+(
+  'obtener_crear_cliente_whatsapp',
+  'ALWAYS',
+  'Obtener o crear un perfil de cliente usando su número de WhatsApp',
+  ARRAY['cliente', 'whatsapp', 'telefono', 'perfil', 'crear', 'obtener', 'contacto', 'nuevo'],
+  ARRAY['cliente', 'whatsapp', 'telefono', 'perfil', 'crear', 'obtener', 'contacto', 'nuevo'],
+  '{"phone": {"type": "string", "required": true, "description": "Número de teléfono del cliente"}}'::jsonb,
+  'get_or_create_client_whatsapp',
+  ARRAY['lead', 'owner']
+),
+
+-- 2. agendar_desde_bot ✅
+(
+  'agendar_desde_bot',
+  'ALWAYS',
+  'Crear una cita directamente desde la interacción del bot',
+  ARRAY['agendar', 'cita', 'crear', 'reservar', 'turno', 'bot', 'programar', 'apartar'],
+  ARRAY['agendar', 'cita', 'crear', 'reservar', 'turno', 'bot', 'programar', 'apartar'],
+  '{"profile_id": {"type": "uuid", "required": true}, "service_id": {"type": "uuid", "required": true}, "datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'create_appointment_bot',
+  ARRAY['lead', 'owner']
+),
+
+-- 3. buscar_disponibilidad ✅
+(
+  'buscar_disponibilidad',
+  'ALWAYS',
+  'Buscar horarios disponibles para agendar un servicio',
+  ARRAY['disponibilidad', 'horarios', 'agenda', 'libre', 'hueco', 'slots', 'disponible', 'cuando'],
+  ARRAY['disponibilidad', 'horarios', 'agenda', 'libre', 'hueco', 'slots', 'disponible', 'cuando'],
+  '{"service_id": {"type": "uuid", "required": true}, "start_date": {"type": "timestamp", "required": true}, "end_date": {"type": "timestamp", "required": true}, "step_minutes": {"type": "integer", "required": false}}'::jsonb,
+  'get_available_slots',
+  ARRAY['lead', 'owner']
+),
+
+-- 4. consultar_servicios_disponibles ✅
+(
+  'consultar_servicios_disponibles',
+  'ALWAYS',
+  'Ver todos los servicios activos disponibles para agendar',
+  ARRAY['servicios', 'tratamientos', 'disponibles', 'catalogo', 'ofrecen', 'hacen', 'tipos'],
+  ARRAY['servicios', 'tratamientos', 'disponibles', 'catalogo', 'ofrecen', 'hacen', 'tipos'],
+  '{}'::jsonb,
+  'get_active_services',
+  ARRAY['lead', 'owner']
+),
+
+-- 5. consultar_citas_cliente ✅
+(
+  'consultar_citas_cliente',
+  'ALWAYS',
+  'Obtener el historial completo de citas de un cliente',
+  ARRAY['historial', 'mis citas', 'proximas', 'pasadas', 'ver citas', 'consultar'],
+  ARRAY['historial', 'mis citas', 'proximas', 'pasadas', 'ver citas', 'consultar'],
+  '{"profile_id": {"type": "uuid", "required": true}, "include_past": {"type": "boolean", "required": false}}'::jsonb,
+  'get_client_appointments',
+  ARRAY['lead', 'owner']
+),
+
+-- 6. cancelar_cita ✅
+(
+  'cancelar_cita',
+  'ALWAYS',
+  'Cancelar una cita existente',
+  ARRAY['cancelar', 'anular', 'eliminar', 'borrar', 'quitar', 'cita'],
+  ARRAY['cancelar', 'anular', 'eliminar', 'borrar', 'quitar', 'cita'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "reason": {"type": "string", "required": false}}'::jsonb,
+  'cancel_appointment',
+  ARRAY['lead', 'owner']
+),
+
+-- 7. reagendar_cita ✅
+(
+  'reagendar_cita',
+  'ALWAYS',
+  'Cambiar la fecha/hora de una cita existente',
+  ARRAY['reagendar', 'cambiar', 'mover', 'reprogramar', 'fecha', 'hora'],
+  ARRAY['reagendar', 'cambiar', 'mover', 'reprogramar', 'fecha', 'hora'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "new_datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'reschedule_appointment',
+  ARRAY['lead', 'owner']
+),
+
+-- 8. confirmar_cita ✅
+(
+  'confirmar_cita',
+  'ALWAYS',
+  'Confirmar asistencia a una cita programada',
+  ARRAY['confirmar', 'asistir', 'voy', 'si confirmo', 'confirmo'],
+  ARRAY['confirmar', 'asistir', 'voy', 'si confirmo', 'confirmo'],
+  '{"appointment_id": {"type": "uuid", "required": true}}'::jsonb,
+  'confirm_appointment',
+  ARRAY['lead', 'owner']
+),
+
+-- 9. ver_detalle_cita ✅
+(
+  'ver_detalle_cita',
+  'ALWAYS',
+  'Ver información completa de una cita específica',
+  ARRAY['detalle', 'informacion', 'ver cita', 'detalles', 'info'],
+  ARRAY['detalle', 'informacion', 'ver cita', 'detalles', 'info'],
+  '{"appointment_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_appointment_details',
+  ARRAY['lead', 'owner']
+),
+
+-- 10. buscar_conocimiento ✅
+(
+  'buscar_conocimiento',
+  'ALWAYS',
+  'Buscar información en la base de conocimiento',
+  ARRAY['buscar', 'informacion', 'preguntas', 'ayuda', 'info', 'conocimiento'],
+  ARRAY['buscar', 'informacion', 'preguntas', 'ayuda', 'info', 'conocimiento'],
+  '{"query": {"type": "string", "required": true}, "max_results": {"type": "integer", "required": false}}'::jsonb,
+  'search_knowledge_hybrid',
+  ARRAY['lead', 'owner']
+),
+
+-- 11. obtener_proxima_cita ✅
+(
+  'obtener_proxima_cita',
+  'ALWAYS',
+  'Obtener la próxima cita programada del cliente',
+  ARRAY['proxima', 'siguiente', 'cuando', 'cita', 'mi cita'],
+  ARRAY['proxima', 'siguiente', 'cuando', 'cita', 'mi cita'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_next_appointment',
+  ARRAY['lead', 'owner']
+),
+
+-- 12. buscar_servicios_categoria ✅
+(
+  'buscar_servicios_categoria',
+  'ALWAYS',
+  'Buscar servicios por categoría específica',
+  ARRAY['categoria', 'tipo', 'servicios', 'laser', 'facial', 'tratamiento'],
+  ARRAY['categoria', 'tipo', 'servicios', 'laser', 'facial', 'tratamiento'],
+  '{"category": {"type": "string", "required": true}}'::jsonb,
+  'get_services_by_category',
+  ARRAY['lead', 'owner']
+),
+
+-- 13. obtener_precio_servicio ✅
+(
+  'obtener_precio_servicio',
+  'ALWAYS',
+  'Consultar el precio de un servicio específico',
+  ARRAY['precio', 'costo', 'cuanto', 'valor', 'tarifa', 'euros'],
+  ARRAY['precio', 'costo', 'cuanto', 'valor', 'tarifa', 'euros'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_service_price',
+  ARRAY['lead', 'owner']
+),
+
+-- 14. obtener_duracion_servicio ✅
+(
+  'obtener_duracion_servicio',
+  'ALWAYS',
+  'Consultar cuánto dura un servicio',
+  ARRAY['duracion', 'cuanto dura', 'tiempo', 'minutos', 'horas'],
+  ARRAY['duracion', 'cuanto dura', 'tiempo', 'minutos', 'horas'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_service_duration',
+  ARRAY['lead', 'owner']
+),
+
+-- 15. buscar_slots_recursos ✅
+(
+  'buscar_slots_recursos',
+  'ALWAYS',
+  'Buscar disponibilidad considerando recursos necesarios',
+  ARRAY['disponibilidad', 'recursos', 'staff', 'equipo', 'sala'],
+  ARRAY['disponibilidad', 'recursos', 'staff', 'equipo', 'sala'],
+  '{"service_id": {"type": "uuid", "required": true}, "start_date": {"type": "timestamp", "required": true}, "end_date": {"type": "timestamp", "required": true}, "step_minutes": {"type": "integer", "required": false}}'::jsonb,
+  'get_available_slots_with_resources',
+  ARRAY['lead', 'owner']
+),
+
+-- 16. confirmar_cita_recursos ✅
+(
+  'confirmar_cita_recursos',
+  'ALWAYS',
+  'Confirmar cita y asignar recursos automáticamente',
+  ARRAY['confirmar', 'reservar', 'asignar', 'recursos'],
+  ARRAY['confirmar', 'reservar', 'asignar', 'recursos'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "confirmation_code": {"type": "string", "required": false}}'::jsonb,
+  'confirm_appointment_with_resources',
+  ARRAY['lead', 'owner']
+),
+
+-- 17. verificar_disponibilidad_especifica ✅
+(
+  'verificar_disponibilidad_especifica',
+  'ALWAYS',
+  'Verificar si un horario específico está disponible',
+  ARRAY['verificar', 'disponible', 'libre', 'ocupado', 'slot'],
+  ARRAY['verificar', 'disponible', 'libre', 'ocupado', 'slot'],
+  '{"service_id": {"type": "uuid", "required": true}, "datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'check_slot_available',
+  ARRAY['lead', 'owner']
+),
+
+-- 18. obtener_perfil_cliente ✅
+(
+  'obtener_perfil_cliente',
+  'ALWAYS',
+  'Obtener información del perfil del cliente',
+  ARRAY['perfil', 'mis datos', 'informacion', 'cuenta'],
+  ARRAY['perfil', 'mis datos', 'informacion', 'cuenta'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_client_profile',
+  ARRAY['lead', 'owner']
+),
+
+-- 19. actualizar_perfil_cliente ✅
+(
+  'actualizar_perfil_cliente',
+  'ALWAYS',
+  'Actualizar información del perfil del cliente',
+  ARRAY['actualizar', 'modificar', 'cambiar', 'perfil', 'datos'],
+  ARRAY['actualizar', 'modificar', 'cambiar', 'perfil', 'datos'],
+  '{"profile_id": {"type": "uuid", "required": true}, "full_name": {"type": "string", "required": false}, "email": {"type": "string", "required": false}, "preferences": {"type": "object", "required": false}}'::jsonb,
+  'update_client_profile',
+  ARRAY['lead', 'owner']
+),
+
+-- 20. crear_sugerencia_conocimiento ✅
+(
+  'crear_sugerencia_conocimiento',
+  'ALWAYS',
+  'Enviar sugerencia para agregar a base de conocimiento',
+  ARRAY['sugerencia', 'pregunta', 'agregar', 'conocimiento'],
+  ARRAY['sugerencia', 'pregunta', 'agregar', 'conocimiento'],
+  '{"question": {"type": "string", "required": true}, "context": {"type": "string", "required": false}}'::jsonb,
+  'create_knowledge_suggestion',
+  ARRAY['lead', 'owner']
+),
+
+-- 21. obtener_horario_negocio ✅
+(
+  'obtener_horario_negocio',
+  'ALWAYS',
+  'Consultar horario de atención del negocio',
+  ARRAY['horario', 'horarios', 'atencion', 'abierto', 'cerrado', 'cuando'],
+  ARRAY['horario', 'horarios', 'atencion', 'abierto', 'cerrado', 'cuando'],
+  '{}'::jsonb,
+  'get_business_hours',
+  ARRAY['lead', 'owner']
+),
+
+-- 22. buscar_preguntas_frecuentes ✅
+(
+  'buscar_preguntas_frecuentes',
+  'ALWAYS',
+  'Ver preguntas frecuentes más populares',
+  ARRAY['preguntas', 'frecuentes', 'faq', 'populares', 'comunes'],
+  ARRAY['preguntas', 'frecuentes', 'faq', 'populares', 'comunes'],
+  '{"limit": {"type": "integer", "required": false}}'::jsonb,
+  'get_popular_questions',
+  ARRAY['lead', 'owner']
+),
+
+-- 23. enviar_mensaje_cliente ✅
+(
+  'enviar_mensaje_cliente',
+  'ALWAYS',
+  'Enviar mensaje personalizado a un cliente',
+  ARRAY['enviar', 'mensaje', 'notificar', 'avisar', 'contactar'],
+  ARRAY['enviar', 'mensaje', 'notificar', 'avisar', 'contactar'],
+  '{"profile_id": {"type": "uuid", "required": true}, "message": {"type": "string", "required": true}, "channel": {"type": "string", "required": false}}'::jsonb,
+  'send_client_message',
+  ARRAY['owner']
+),
+
+-- 24. verificar_politica_cancelacion ✅
+(
+  'verificar_politica_cancelacion',
+  'ALWAYS',
+  'Consultar política de cancelación del negocio',
+  ARRAY['politica', 'cancelacion', 'reglas', 'condiciones'],
+  ARRAY['politica', 'cancelacion', 'reglas', 'condiciones'],
+  '{}'::jsonb,
+  'get_cancellation_policy',
+  ARRAY['lead', 'owner']
+),
+
+-- 25. buscar_servicios_texto ✅
+(
+  'buscar_servicios_texto',
+  'ALWAYS',
+  'Buscar servicios por texto libre',
+  ARRAY['buscar', 'servicios', 'encontrar', 'tratamiento'],
+  ARRAY['buscar', 'servicios', 'encontrar', 'tratamiento'],
+  '{"search_query": {"type": "string", "required": true}}'::jsonb,
+  'search_services',
+  ARRAY['lead', 'owner']
+),
+
+-- 26. obtener_recomendaciones ✅
+(
+  'obtener_recomendaciones',
+  'ALWAYS',
+  'Obtener recomendaciones de servicios basadas en historial',
+  ARRAY['recomendar', 'sugerencias', 'recomendaciones', 'que me aconsejas'],
+  ARRAY['recomendar', 'sugerencias', 'recomendaciones', 'que me aconsejas'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_service_recommendations',
+  ARRAY['lead', 'owner']
+),
+
+-- 27. consultar_cross_sell ✅
+(
+  'consultar_cross_sell',
+  'ALWAYS',
+  'Obtener servicios complementarios para venta cruzada',
+  ARRAY['complementario', 'adicional', 'tambien', 'junto', 'cross'],
+  ARRAY['complementario', 'adicional', 'tambien', 'junto', 'cross'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_cross_sell_recommendations',
+  ARRAY['lead', 'owner']
+),
+
+-- 28. verificar_servicio_activo ✅
+(
+  'verificar_servicio_activo',
+  'ALWAYS',
+  'Verificar si un servicio está activo y disponible',
+  ARRAY['activo', 'disponible', 'servicio', 'ofrecen'],
+  ARRAY['activo', 'disponible', 'servicio', 'ofrecen'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'check_service_active',
+  ARRAY['lead', 'owner']
+),
+
+-- 29. contar_citas_cliente ✅
+(
+  'contar_citas_cliente',
+  'ALWAYS',
+  'Contar total de citas de un cliente',
+  ARRAY['contar', 'cuantas', 'total', 'numero', 'citas'],
+  ARRAY['contar', 'cuantas', 'total', 'numero', 'citas'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'count_client_appointments',
+  ARRAY['lead', 'owner']
+),
+
+-- 30. verificar_cita_proxima_24h ✅
+(
+  'verificar_cita_proxima_24h',
+  'ALWAYS',
+  'Verificar si el cliente tiene cita en las próximas 24 horas',
+  ARRAY['proxima', '24 horas', 'hoy', 'manana', 'pronto'],
+  ARRAY['proxima', '24 horas', 'hoy', 'manana', 'pronto'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'has_appointment_next_24h',
+  ARRAY['lead', 'owner']
+),
+
+-- 31. obtener_servicios_mas_populares ✅
+(
+  'obtener_servicios_mas_populares',
+  'ALWAYS',
+  'Ver los servicios más solicitados',
+  ARRAY['populares', 'mas pedidos', 'favoritos', 'top', 'mejores'],
+  ARRAY['populares', 'mas pedidos', 'favoritos', 'top', 'mejores'],
+  '{"limit": {"type": "integer", "required": false}}'::jsonb,
+  'get_top_services',
+  ARRAY['lead', 'owner']
+),
+
+-- 32. calcular_tiempo_total ✅
+(
+  'calcular_tiempo_total',
+  'ALWAYS',
+  'Calcular tiempo total para múltiples servicios',
+  ARRAY['tiempo', 'duracion', 'total', 'cuanto dura', 'minutos'],
+  ARRAY['tiempo', 'duracion', 'total', 'cuanto dura', 'minutos'],
+  '{"service_ids": {"type": "array", "required": true}}'::jsonb,
+  'calculate_total_duration',
+  ARRAY['lead', 'owner']
+),
+
+-- 33. verificar_disponibilidad_dia ✅
+(
+  'verificar_disponibilidad_dia',
+  'ALWAYS',
+  'Verificar si hay disponibilidad en un día específico',
+  ARRAY['disponible', 'dia', 'fecha', 'libre', 'hay'],
+  ARRAY['disponible', 'dia', 'fecha', 'libre', 'hay'],
+  '{"date": {"type": "date", "required": true}, "service_id": {"type": "uuid", "required": false}}'::jsonb,
+  'check_day_availability',
+  ARRAY['lead', 'owner']
+),
+
+-- 34. obtener_detalles_servicio ✅
+(
+  'obtener_detalles_servicio',
+  'ALWAYS',
+  'Obtener información detallada de un servicio',
+  ARRAY['detalles', 'informacion', 'descripcion', 'que es', 'en que consiste'],
+  ARRAY['detalles', 'informacion', 'descripcion', 'que es', 'en que consiste'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_service_details',
+  ARRAY['lead', 'owner']
+),
+
+-- 35. listar_servicios_rango_precio ✅
+(
+  'listar_servicios_rango_precio',
+  'ALWAYS',
+  'Buscar servicios dentro de un rango de precio',
+  ARRAY['precio', 'rango', 'entre', 'costo', 'economico', 'barato'],
+  ARRAY['precio', 'rango', 'entre', 'costo', 'economico', 'barato'],
+  '{"min_price": {"type": "number", "required": false}, "max_price": {"type": "number", "required": false}}'::jsonb,
+  'get_services_by_price_range',
+  ARRAY['lead', 'owner']
+),
+
+-- 36. verificar_puede_agendar ✅
+(
+  'verificar_puede_agendar',
+  'ALWAYS',
+  'Verificar si el cliente puede agendar (sin deudas, no bloqueado)',
+  ARRAY['puede', 'agendar', 'permitido', 'bloqueado'],
+  ARRAY['puede', 'agendar', 'permitido', 'bloqueado'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'can_client_book',
+  ARRAY['lead', 'owner']
+),
+
+-- 37. obtener_metodo_contacto_preferido ✅
+(
+  'obtener_metodo_contacto_preferido',
+  'ALWAYS',
+  'Consultar método de contacto preferido del cliente',
+  ARRAY['contacto', 'preferido', 'como', 'comunicacion'],
+  ARRAY['contacto', 'preferido', 'como', 'comunicacion'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_preferred_contact_method',
+  ARRAY['lead', 'owner']
+),
+
+-- 38. buscar_articulos_conocimiento ✅
+(
+  'buscar_articulos_conocimiento',
+  'ALWAYS',
+  'Buscar artículos relacionados en la base de conocimiento',
+  ARRAY['articulos', 'relacionados', 'informacion', 'mas info'],
+  ARRAY['articulos', 'relacionados', 'informacion', 'mas info'],
+  '{"kb_id": {"type": "uuid", "required": true}, "limit": {"type": "integer", "required": false}}'::jsonb,
+  'get_related_questions',
+  ARRAY['lead', 'owner']
+),
+
+-- 39. registrar_visualizacion_kb ✅
+(
+  'registrar_visualizacion_kb',
+  'ALWAYS',
+  'Registrar que un artículo de conocimiento fue visto',
+  ARRAY['visualizar', 'ver', 'leer', 'articulo'],
+  ARRAY['visualizar', 'ver', 'leer', 'articulo'],
+  '{"kb_id": {"type": "uuid", "required": true}, "user_identifier": {"type": "string", "required": false}}'::jsonb,
+  'increment_kb_view_count_guarded',
+  ARRAY['lead', 'owner']
+),
+
+-- 40. obtener_configuracion_negocio ✅
+(
+  'obtener_configuracion_negocio',
+  'ALWAYS',
+  'Obtener configuración general del negocio',
+  ARRAY['configuracion', 'info', 'negocio', 'datos'],
+  ARRAY['configuracion', 'info', 'negocio', 'datos'],
+  '{}'::jsonb,
+  'get_business_settings',
+  ARRAY['lead', 'owner']
+);
+
+COMMIT;
+
+-- ===================================================
+-- VERIFICACIÓN
+-- ===================================================
+
+DO $$
+DECLARE
+  v_count int;
+BEGIN
+  SELECT COUNT(*) INTO v_count FROM global_tool_definitions WHERE tool_category = 'ALWAYS';
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+  RAISE NOTICE '✅ SEED PARTE 1 COMPLETADO (CORREGIDO)';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+  RAISE NOTICE '';
+  RAISE NOTICE '📊 Herramientas ALWAYS insertadas: %', v_count;
+  RAISE NOTICE '✅ TODAS las funciones RPC están implementadas';
+  RAISE NOTICE '';
+  RAISE NOTICE '📜 SIGUIENTE PASO:';
+  RAISE NOTICE '   Aplicar: SEED_PARTE_2_CORREGIDO.sql';
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+END $$;
