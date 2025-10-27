@@ -1,0 +1,542 @@
+-- ===============================================
+-- MIGRATION FIXED - Drops existing functions first
+-- ===============================================
+
+BEGIN;
+
+-- Drop all functions that might exist
+DO $$ 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT proname, oidvectortypes(proargtypes) as args
+        FROM pg_proc 
+        WHERE pronamespace = 'public'::regnamespace
+        AND proname IN (
+            'get_or_create_client_whatsapp', 'get_client_profile', 'update_client_profile',
+            'count_client_appointments', 'can_client_book', 'get_preferred_contact_method',
+            'has_appointment_next_24h', 'get_service_price', 'get_service_duration',
+            'get_service_details', 'search_services', 'get_services_by_category',
+            'get_services_by_price_range', 'check_service_active', 'get_top_services',
+            'calculate_total_duration', 'check_day_availability', 'get_business_hours',
+            'get_cancellation_policy', 'get_popular_questions', 'create_knowledge_suggestion',
+            'send_client_message', 'get_service_recommendations', 'get_cross_sell_recommendations',
+            'check_slot_available', 'add_to_waitlist', 'get_waitlist_position',
+            'get_next_waitlist_client', 'remove_from_waitlist', 'convert_waitlist_to_appointment',
+            'list_waitlist_by_service', 'update_waitlist_priority', 'get_client_packages',
+            'check_package_sessions_remaining', 'list_available_packages', 'check_package_validity',
+            'get_package_usage_history', 'get_inventory_item', 'list_all_inventory',
+            'add_inventory_item', 'update_inventory_quantity', 'register_product_sale',
+            'get_low_stock_items', 'get_out_of_stock_items', 'search_inventory',
+            'get_total_inventory_value', 'get_revenue_by_period', 'get_appointments_by_status',
+            'get_top_clients', 'get_cancellation_rate', 'get_no_show_stats',
+            'create_service', 'update_service', 'delete_service', 'search_clients',
+            'list_all_clients', 'update_client_role', 'create_knowledge_article',
+            'update_knowledge_article', 'delete_knowledge_article', 'review_knowledge_suggestions',
+            'set_business_hours', 'update_business_settings', 'create_staff_member',
+            'list_staff', 'create_client_note', 'get_client_notes', 'get_global_metrics'
+        )
+    ) LOOP
+        EXECUTE 'DROP FUNCTION IF EXISTS public.' || r.proname || '(' || r.args || ') CASCADE';
+    END LOOP;
+END $$;
+
+BEGIN;
+
+-- ===============================================
+-- 1. get_service_price
+-- Obtener precio de un servicio
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_service_price(
+  p_service_id uuid
+)
+RETURNS numeric
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_price numeric;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT base_price INTO v_price
+  FROM public.services
+  WHERE id = p_service_id
+    AND business_id = v_business_id
+    AND is_active = true;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Service not found or inactive';
+  END IF;
+  
+  RETURN v_price;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_service_price IS
+  'Obtener precio base de un servicio';
+
+-- ===============================================
+-- 2. get_service_duration
+-- Obtener duración de un servicio
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_service_duration(
+  p_service_id uuid
+)
+RETURNS integer
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_duration int;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT duration_minutes INTO v_duration
+  FROM public.services
+  WHERE id = p_service_id
+    AND business_id = v_business_id
+    AND is_active = true;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Service not found or inactive';
+  END IF;
+  
+  RETURN v_duration;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_service_duration IS
+  'Obtener duración en minutos de un servicio';
+
+-- ===============================================
+-- 3. get_service_details
+-- Obtener información detallada de un servicio
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_service_details(
+  p_service_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_build_object(
+    'service_id', s.id,
+    'name', s.name,
+    'description', s.description,
+    'base_price', s.base_price,
+    'duration_minutes', s.duration_minutes,
+    'category', s.category,
+    'is_active', s.is_active,
+    'metadata', s.metadata,
+    'requires_deposit', s.requires_deposit,
+    'deposit_amount', s.deposit_amount
+  )
+  INTO v_result
+  FROM public.services s
+  WHERE s.id = p_service_id
+    AND s.business_id = v_business_id;
+  
+  IF v_result IS NULL THEN
+    RAISE EXCEPTION 'Service not found';
+  END IF;
+  
+  RETURN v_result;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_service_details IS
+  'Obtener información detallada completa de un servicio';
+
+-- ===============================================
+-- 4. search_services
+-- Buscar servicios por texto
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.search_services(
+  p_search_query text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+  v_search_normalized text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  v_search_normalized := lower(unaccent(p_search_query));
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'service_id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'base_price', s.base_price,
+      'duration_minutes', s.duration_minutes,
+      'category', s.category
+    )
+  )
+  INTO v_result
+  FROM public.services s
+  WHERE s.business_id = v_business_id
+    AND s.is_active = true
+    AND (
+      lower(unaccent(s.name)) LIKE '%' || v_search_normalized || '%'
+      OR lower(unaccent(s.description)) LIKE '%' || v_search_normalized || '%'
+      OR lower(unaccent(s.category)) LIKE '%' || v_search_normalized || '%'
+    )
+  ORDER BY s.name;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.search_services IS
+  'Buscar servicios por texto en nombre, descripción o categoría';
+
+-- ===============================================
+-- 5. get_services_by_category
+-- Obtener servicios por categoría
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_services_by_category(
+  p_category text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'service_id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'base_price', s.base_price,
+      'duration_minutes', s.duration_minutes
+    ) ORDER BY s.name
+  )
+  INTO v_result
+  FROM public.services s
+  WHERE s.business_id = v_business_id
+    AND s.is_active = true
+    AND lower(s.category) = lower(p_category)
+  ORDER BY s.name;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_services_by_category IS
+  'Obtener todos los servicios de una categoría específica';
+
+-- ===============================================
+-- 6. get_services_by_price_range
+-- Obtener servicios por rango de precio
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_services_by_price_range(
+  p_min_price numeric DEFAULT NULL,
+  p_max_price numeric DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'service_id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'base_price', s.base_price,
+      'duration_minutes', s.duration_minutes,
+      'category', s.category
+    ) ORDER BY s.base_price ASC
+  )
+  INTO v_result
+  FROM public.services s
+  WHERE s.business_id = v_business_id
+    AND s.is_active = true
+    AND (p_min_price IS NULL OR s.base_price >= p_min_price)
+    AND (p_max_price IS NULL OR s.base_price <= p_max_price);
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_services_by_price_range IS
+  'Obtener servicios dentro de un rango de precios';
+
+-- ===============================================
+-- 7. check_service_active
+-- Verificar si un servicio está activo
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.check_service_active(
+  p_service_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_is_active boolean;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT is_active INTO v_is_active
+  FROM public.services
+  WHERE id = p_service_id
+    AND business_id = v_business_id;
+  
+  RETURN COALESCE(v_is_active, false);
+END;
+$$;
+
+COMMENT ON FUNCTION public.check_service_active IS
+  'Verificar si un servicio está activo y disponible';
+
+-- ===============================================
+-- 8. get_top_services
+-- Obtener servicios más populares
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.get_top_services(
+  p_limit int DEFAULT 10
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'service_id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'base_price', s.base_price,
+      'duration_minutes', s.duration_minutes,
+      'category', s.category,
+      'booking_count', booking_count
+    )
+  )
+  INTO v_result
+  FROM (
+    SELECT 
+      s.*,
+      COUNT(a.id) as booking_count
+    FROM public.services s
+    LEFT JOIN public.appointments a ON a.service_id = s.id 
+      AND a.status IN ('confirmed', 'completed')
+    WHERE s.business_id = v_business_id
+      AND s.is_active = true
+    GROUP BY s.id
+    ORDER BY booking_count DESC, s.name ASC
+    LIMIT p_limit
+  ) s;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_top_services IS
+  'Obtener los servicios más solicitados/populares';
+
+-- ===============================================
+-- 9. calculate_total_duration
+-- Calcular duración total de múltiples servicios
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.calculate_total_duration(
+  p_service_ids uuid[]
+)
+RETURNS integer
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_total_minutes int;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT COALESCE(SUM(duration_minutes), 0)
+  INTO v_total_minutes
+  FROM public.services
+  WHERE id = ANY(p_service_ids)
+    AND business_id = v_business_id
+    AND is_active = true;
+  
+  RETURN v_total_minutes;
+END;
+$$;
+
+COMMENT ON FUNCTION public.calculate_total_duration IS
+  'Calcular duración total en minutos de múltiples servicios';
+
+-- ===============================================
+-- 10. check_day_availability
+-- Verificar disponibilidad en un día específico
+-- ===============================================
+CREATE OR REPLACE FUNCTION public.check_day_availability(
+  p_date date,
+  p_service_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_day_start timestamptz;
+  v_day_end timestamptz;
+  v_slots_available int;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  v_day_start := p_date::timestamptz;
+  v_day_end := (p_date + interval '1 day')::timestamptz;
+  
+  -- Contar slots disponibles aproximadamente
+  -- Esta es una simplificación, la lógica real depende de get_available_slots
+  SELECT COUNT(*)
+  INTO v_slots_available
+  FROM generate_series(
+    v_day_start,
+    v_day_end - interval '1 hour',
+    interval '30 minutes'
+  ) AS slot_time
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.appointments a
+    WHERE a.business_id = v_business_id
+      AND a.status = 'confirmed'
+      AND (p_service_id IS NULL OR a.service_id = p_service_id)
+      AND tstzrange(a.start_time, a.end_time, '[)') @> slot_time
+  );
+  
+  RETURN jsonb_build_object(
+    'date', p_date,
+    'has_availability', v_slots_available > 0,
+    'approximate_slots', v_slots_available
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.check_day_availability IS
+  'Verificar si hay disponibilidad en un día específico';
+
+-- ===============================================
+-- GRANTS
+-- ===============================================
+GRANT EXECUTE ON FUNCTION public.get_service_price(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_service_duration(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_service_details(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.search_services(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_services_by_category(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_services_by_price_range(numeric, numeric) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_service_active(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_top_services(int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.calculate_total_duration(uuid[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_day_availability(date, uuid) TO authenticated;
+
+COMMIT;
+
+-- Verificación
+DO $$
+BEGIN
+  RAISE NOTICE '✅ Migration 0302 completed successfully';
+  RAISE NOTICE '📦 Functions created: 10';
+  RAISE NOTICE '   - get_service_price';
+  RAISE NOTICE '   - get_service_duration';
+  RAISE NOTICE '   - get_service_details';
+  RAISE NOTICE '   - search_services';
+  RAISE NOTICE '   - get_services_by_category';
+  RAISE NOTICE '   - get_services_by_price_range';
+  RAISE NOTICE '   - check_service_active';
+  RAISE NOTICE '   - get_top_services';
+  RAISE NOTICE '   - calculate_total_duration';
+  RAISE NOTICE '   - check_day_availability';
+END $$;
