@@ -1,0 +1,532 @@
+-- ===============================================
+-- MIGRATION FIXED - Drops existing functions first
+-- ===============================================
+
+BEGIN;
+
+-- Drop all functions that might exist
+DO $$ 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT proname, oidvectortypes(proargtypes) as args
+        FROM pg_proc 
+        WHERE pronamespace = 'public'::regnamespace
+        AND proname IN (
+            'get_or_create_client_whatsapp', 'get_client_profile', 'update_client_profile',
+            'count_client_appointments', 'can_client_book', 'get_preferred_contact_method',
+            'has_appointment_next_24h', 'get_service_price', 'get_service_duration',
+            'get_service_details', 'search_services', 'get_services_by_category',
+            'get_services_by_price_range', 'check_service_active', 'get_top_services',
+            'calculate_total_duration', 'check_day_availability', 'get_business_hours',
+            'get_cancellation_policy', 'get_popular_questions', 'create_knowledge_suggestion',
+            'send_client_message', 'get_service_recommendations', 'get_cross_sell_recommendations',
+            'check_slot_available', 'add_to_waitlist', 'get_waitlist_position',
+            'get_next_waitlist_client', 'remove_from_waitlist', 'convert_waitlist_to_appointment',
+            'list_waitlist_by_service', 'update_waitlist_priority', 'get_client_packages',
+            'check_package_sessions_remaining', 'list_available_packages', 'check_package_validity',
+            'get_package_usage_history', 'get_inventory_item', 'list_all_inventory',
+            'add_inventory_item', 'update_inventory_quantity', 'register_product_sale',
+            'get_low_stock_items', 'get_out_of_stock_items', 'search_inventory',
+            'get_total_inventory_value', 'get_revenue_by_period', 'get_appointments_by_status',
+            'get_top_clients', 'get_cancellation_rate', 'get_no_show_stats',
+            'create_service', 'update_service', 'delete_service', 'search_clients',
+            'list_all_clients', 'update_client_role', 'create_knowledge_article',
+            'update_knowledge_article', 'delete_knowledge_article', 'review_knowledge_suggestions',
+            'set_business_hours', 'update_business_settings', 'create_staff_member',
+            'list_staff', 'create_client_note', 'get_client_notes', 'get_global_metrics'
+        )
+    ) LOOP
+        EXECUTE 'DROP FUNCTION IF EXISTS public.' || r.proname || '(' || r.args || ') CASCADE';
+    END LOOP;
+END $$;
+
+BEGIN;
+
+-- ===============================================
+-- WAITLIST FUNCTIONS
+-- ===============================================
+
+-- 1. add_to_waitlist
+CREATE OR REPLACE FUNCTION public.add_to_waitlist(
+  p_profile_id uuid,
+  p_service_id uuid,
+  p_priority int DEFAULT 0
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_waitlist_id uuid;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  INSERT INTO public.waitlists (
+    business_id,
+    profile_id,
+    service_id,
+    priority,
+    status
+  ) VALUES (
+    v_business_id,
+    p_profile_id,
+    p_service_id,
+    p_priority,
+    'waiting'
+  )
+  RETURNING id INTO v_waitlist_id;
+  
+  RETURN v_waitlist_id;
+END;
+$$;
+
+-- 2. get_waitlist_position
+CREATE OR REPLACE FUNCTION public.get_waitlist_position(
+  p_waitlist_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_waitlist RECORD;
+  v_position int;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT * INTO v_waitlist
+  FROM public.waitlists
+  WHERE id = p_waitlist_id
+    AND business_id = v_business_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Waitlist entry not found';
+  END IF;
+  
+  SELECT COUNT(*) + 1 INTO v_position
+  FROM public.waitlists
+  WHERE business_id = v_business_id
+    AND service_id = v_waitlist.service_id
+    AND status = 'waiting'
+    AND (
+      priority > v_waitlist.priority
+      OR (priority = v_waitlist.priority AND created_at < v_waitlist.created_at)
+    );
+  
+  RETURN jsonb_build_object(
+    'waitlist_id', p_waitlist_id,
+    'position', v_position,
+    'service_id', v_waitlist.service_id,
+    'status', v_waitlist.status
+  );
+END;
+$$;
+
+-- 3. get_next_waitlist_client
+CREATE OR REPLACE FUNCTION public.get_next_waitlist_client(
+  p_service_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT jsonb_build_object(
+    'waitlist_id', w.id,
+    'profile_id', w.profile_id,
+    'client_name', p.full_name,
+    'client_phone', p.phone_number,
+    'priority', w.priority,
+    'created_at', w.created_at
+  )
+  INTO v_result
+  FROM public.waitlists w
+  JOIN public.profiles p ON p.id = w.profile_id
+  WHERE w.business_id = v_business_id
+    AND w.service_id = p_service_id
+    AND w.status = 'waiting'
+  ORDER BY w.priority DESC, w.created_at ASC
+  LIMIT 1;
+  
+  RETURN COALESCE(v_result, 'null'::jsonb);
+END;
+$$;
+
+-- 4. remove_from_waitlist
+CREATE OR REPLACE FUNCTION public.remove_from_waitlist(
+  p_waitlist_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  UPDATE public.waitlists
+  SET status = 'cancelled'
+  WHERE id = p_waitlist_id
+    AND business_id = v_business_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Waitlist entry not found';
+  END IF;
+  
+  RETURN jsonb_build_object('success', true, 'waitlist_id', p_waitlist_id);
+END;
+$$;
+
+-- 5. convert_waitlist_to_appointment
+CREATE OR REPLACE FUNCTION public.convert_waitlist_to_appointment(
+  p_waitlist_id uuid,
+  p_datetime timestamptz
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_waitlist RECORD;
+  v_appointment_id uuid;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT * INTO v_waitlist
+  FROM public.waitlists
+  WHERE id = p_waitlist_id
+    AND business_id = v_business_id
+    AND status = 'waiting'
+  FOR UPDATE;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Waitlist entry not found or already processed';
+  END IF;
+  
+  -- Crear cita usando la función existente
+  v_appointment_id := public.create_appointment_bot(
+    v_waitlist.profile_id,
+    v_waitlist.service_id,
+    p_datetime
+  );
+  
+  -- Actualizar estado del waitlist
+  UPDATE public.waitlists
+  SET status = 'converted',
+      metadata = metadata || jsonb_build_object('appointment_id', v_appointment_id)
+  WHERE id = p_waitlist_id;
+  
+  RETURN v_appointment_id;
+END;
+$$;
+
+-- 6. list_waitlist_by_service
+CREATE OR REPLACE FUNCTION public.list_waitlist_by_service(
+  p_service_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'waitlist_id', w.id,
+      'profile_id', w.profile_id,
+      'client_name', p.full_name,
+      'client_phone', p.phone_number,
+      'priority', w.priority,
+      'status', w.status,
+      'created_at', w.created_at
+    ) ORDER BY w.priority DESC, w.created_at ASC
+  )
+  INTO v_result
+  FROM public.waitlists w
+  JOIN public.profiles p ON p.id = w.profile_id
+  WHERE w.business_id = v_business_id
+    AND w.service_id = p_service_id
+    AND w.status = 'waiting';
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- 7. update_waitlist_priority
+CREATE OR REPLACE FUNCTION public.update_waitlist_priority(
+  p_waitlist_id uuid,
+  p_new_priority int
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  UPDATE public.waitlists
+  SET priority = p_new_priority
+  WHERE id = p_waitlist_id
+    AND business_id = v_business_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Waitlist entry not found';
+  END IF;
+  
+  RETURN jsonb_build_object(
+    'success', true,
+    'waitlist_id', p_waitlist_id,
+    'new_priority', p_new_priority
+  );
+END;
+$$;
+
+-- ===============================================
+-- PACKAGES FUNCTIONS (complementando 0235)
+-- ===============================================
+
+-- 8. get_client_packages
+CREATE OR REPLACE FUNCTION public.get_client_packages(
+  p_profile_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'client_package_id', cp.id,
+      'package_name', sp.name,
+      'total_sessions', cp.total_sessions,
+      'sessions_used', cp.sessions_used,
+      'sessions_remaining', cp.sessions_remaining,
+      'purchased_at', cp.purchased_at,
+      'expires_at', cp.expires_at,
+      'status', cp.status,
+      'price_paid', cp.price_paid
+    ) ORDER BY cp.purchased_at DESC
+  )
+  INTO v_result
+  FROM public.client_packages cp
+  JOIN public.service_packages sp ON sp.id = cp.package_id
+  WHERE cp.business_id = v_business_id
+    AND cp.profile_id = p_profile_id;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- 9. check_package_sessions_remaining
+CREATE OR REPLACE FUNCTION public.check_package_sessions_remaining(
+  p_client_package_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_package RECORD;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT 
+    cp.sessions_remaining,
+    cp.total_sessions,
+    cp.sessions_used,
+    cp.status,
+    cp.expires_at
+  INTO v_package
+  FROM public.client_packages cp
+  WHERE cp.id = p_client_package_id
+    AND cp.business_id = v_business_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Package not found';
+  END IF;
+  
+  RETURN jsonb_build_object(
+    'client_package_id', p_client_package_id,
+    'sessions_remaining', v_package.sessions_remaining,
+    'sessions_used', v_package.sessions_used,
+    'total_sessions', v_package.total_sessions,
+    'status', v_package.status,
+    'expires_at', v_package.expires_at,
+    'is_expired', v_package.expires_at < now()
+  );
+END;
+$$;
+
+-- 10. list_available_packages
+CREATE OR REPLACE FUNCTION public.list_available_packages()
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'package_id', sp.id,
+      'name', sp.name,
+      'description', sp.description,
+      'price', sp.price,
+      'total_sessions', sp.total_sessions,
+      'validity_months', sp.validity_months,
+      'service_name', CASE 
+        WHEN sp.service_id IS NOT NULL THEN s.name
+        ELSE 'Multiservicio'
+      END
+    ) ORDER BY sp.price ASC
+  )
+  INTO v_result
+  FROM public.service_packages sp
+  LEFT JOIN public.services s ON s.id = sp.service_id
+  WHERE sp.business_id = v_business_id
+    AND sp.is_active = true
+    AND sp.is_legacy = false;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- 11. check_package_validity
+CREATE OR REPLACE FUNCTION public.check_package_validity(
+  p_client_package_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_expires_at timestamptz;
+  v_status text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT expires_at, status
+  INTO v_expires_at, v_status
+  FROM public.client_packages
+  WHERE id = p_client_package_id
+    AND business_id = v_business_id;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Package not found';
+  END IF;
+  
+  RETURN (v_status = 'active' AND v_expires_at >= now());
+END;
+$$;
+
+-- 12. get_package_usage_history
+CREATE OR REPLACE FUNCTION public.get_package_usage_history(
+  p_client_package_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'usage_id', psu.id,
+      'used_at', psu.used_at,
+      'appointment_id', psu.appointment_id,
+      'service_name', s.name,
+      'appointment_date', a.start_time
+    ) ORDER BY psu.used_at DESC
+  )
+  INTO v_result
+  FROM public.package_session_usage psu
+  LEFT JOIN public.appointments a ON a.id = psu.appointment_id
+  LEFT JOIN public.services s ON s.id = a.service_id
+  WHERE psu.client_package_id = p_client_package_id
+    AND psu.business_id = v_business_id;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- ===============================================
+-- GRANTS
+-- ===============================================
+GRANT EXECUTE ON FUNCTION public.add_to_waitlist(uuid, uuid, int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_waitlist_position(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_next_waitlist_client(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.remove_from_waitlist(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.convert_waitlist_to_appointment(uuid, timestamptz) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.list_waitlist_by_service(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_waitlist_priority(uuid, int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_client_packages(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_package_sessions_remaining(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.list_available_packages() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_package_validity(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_package_usage_history(uuid) TO authenticated;
+
+COMMIT;
+
+-- Verificación
+DO $$
+BEGIN
+  RAISE NOTICE '✅ Migration 0304 completed successfully';
+  RAISE NOTICE '📦 Functions created: 12 (7 waitlist + 5 packages)';
+  RAISE NOTICE '   WAITLIST: add, get_position, get_next, remove, convert, list, update_priority';
+  RAISE NOTICE '   PACKAGES: get_client_packages, check_sessions, list_available, check_validity, usage_history';
+END $$;
