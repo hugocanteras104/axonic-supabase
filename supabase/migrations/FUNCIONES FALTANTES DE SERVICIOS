@@ -1,0 +1,143 @@
+-- ===============================================
+-- FUNCIONES FALTANTES DE SERVICIOS
+-- ===============================================
+
+BEGIN;
+
+-- 1. search_services
+CREATE OR REPLACE FUNCTION public.search_services(
+  p_search_query text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'service_id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'base_price', s.base_price,
+      'duration_minutes', s.duration_minutes,
+      'category', s.category
+    )
+  )
+  INTO v_result
+  FROM public.services s
+  WHERE s.business_id = v_business_id
+    AND s.is_active = true
+    AND (
+      lower(s.name) LIKE '%' || lower(p_search_query) || '%'
+      OR lower(s.description) LIKE '%' || lower(p_search_query) || '%'
+      OR lower(s.category) LIKE '%' || lower(p_search_query) || '%'
+    )
+  ORDER BY s.name;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- 2. get_service_details
+CREATE OR REPLACE FUNCTION public.get_service_details(
+  p_service_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_build_object(
+    'service_id', s.id,
+    'name', s.name,
+    'description', s.description,
+    'base_price', s.base_price,
+    'duration_minutes', s.duration_minutes,
+    'category', s.category,
+    'is_active', s.is_active,
+    'metadata', s.metadata
+  )
+  INTO v_result
+  FROM public.services s
+  WHERE s.id = p_service_id
+    AND s.business_id = v_business_id;
+  
+  IF v_result IS NULL THEN
+    RAISE EXCEPTION 'Service not found';
+  END IF;
+  
+  RETURN v_result;
+END;
+$$;
+
+-- 3. get_service_price
+CREATE OR REPLACE FUNCTION public.get_service_price(
+  p_service_id uuid
+)
+RETURNS numeric
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_price numeric;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT base_price INTO v_price
+  FROM public.services
+  WHERE id = p_service_id
+    AND business_id = v_business_id
+    AND is_active = true;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Service not found or inactive';
+  END IF;
+  
+  RETURN v_price;
+END;
+$$;
+
+-- Permisos
+GRANT EXECUTE ON FUNCTION public.search_services(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_service_details(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_service_price(uuid) TO authenticated;
+
+COMMIT;
+
+-- Verificación
+DO $$
+BEGIN
+  RAISE NOTICE '✅ 3 funciones de servicios creadas:';
+  RAISE NOTICE '   • search_services';
+  RAISE NOTICE '   • get_service_details';
+  RAISE NOTICE '   • get_service_price';
+END $$;
