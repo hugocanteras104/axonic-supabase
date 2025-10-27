@@ -1,0 +1,432 @@
+-- ===============================================
+-- PARCHE: Corregir full_name → name
+-- Aplica DESPUÉS de las migraciones FIXED
+-- ===============================================
+
+BEGIN;
+
+-- ===============================================
+-- ACTUALIZAR get_client_profile
+-- ===============================================
+DROP FUNCTION IF EXISTS public.get_client_profile(uuid) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.get_client_profile(
+  p_profile_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+  v_role text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_build_object(
+    'profile_id', p.id,
+    'name', p.name,  -- ✅ CORREGIDO: full_name → name
+    'phone_number', p.phone_number,
+    'email', p.email,
+    'role', p.role,
+    'metadata', p.metadata,
+    'created_at', p.created_at,
+    'stats', jsonb_build_object(
+      'total_appointments', (
+        SELECT COUNT(*) 
+        FROM appointments 
+        WHERE profile_id = p.id AND business_id = v_business_id
+      ),
+      'completed_appointments', (
+        SELECT COUNT(*) 
+        FROM appointments 
+        WHERE profile_id = p.id 
+          AND business_id = v_business_id 
+          AND status = 'completed'
+      ),
+      'cancelled_appointments', (
+        SELECT COUNT(*) 
+        FROM appointments 
+        WHERE profile_id = p.id 
+          AND business_id = v_business_id 
+          AND status = 'cancelled'
+      )
+    )
+  )
+  INTO v_result
+  FROM public.profiles p
+  WHERE p.id = p_profile_id
+    AND p.business_id = v_business_id;
+  
+  IF v_result IS NULL THEN
+    RAISE EXCEPTION 'Profile not found';
+  END IF;
+  
+  RETURN v_result;
+END;
+$$;
+
+-- ===============================================
+-- ACTUALIZAR update_client_profile
+-- ===============================================
+DROP FUNCTION IF EXISTS public.update_client_profile(uuid, text, text, jsonb) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.update_client_profile(
+  p_profile_id uuid,
+  p_name text DEFAULT NULL,  -- ✅ CORREGIDO: full_name → name
+  p_email text DEFAULT NULL,
+  p_preferences jsonb DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_role text;
+  v_user_id uuid;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  BEGIN
+    v_user_id := (auth.jwt()->>'sub')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    v_user_id := NULL;
+  END;
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = p_profile_id
+      AND business_id = v_business_id
+  ) THEN
+    RAISE EXCEPTION 'Profile not found';
+  END IF;
+  
+  IF v_role = 'lead' AND p_profile_id != v_user_id THEN
+    RAISE EXCEPTION 'Cannot update profiles of other clients';
+  END IF;
+  
+  UPDATE public.profiles
+  SET
+    name = COALESCE(p_name, name),  -- ✅ CORREGIDO: full_name → name
+    email = COALESCE(p_email, email),
+    metadata = CASE 
+      WHEN p_preferences IS NOT NULL 
+      THEN metadata || jsonb_build_object('preferences', p_preferences)
+      ELSE metadata
+    END,
+    updated_at = now()
+  WHERE id = p_profile_id
+    AND business_id = v_business_id;
+  
+  INSERT INTO public.audit_logs (business_id, profile_id, action, payload)
+  VALUES (
+    v_business_id,
+    p_profile_id,
+    'profile_updated',
+    jsonb_build_object(
+      'updated_fields', jsonb_build_object(
+        'name', p_name IS NOT NULL,
+        'email', p_email IS NOT NULL,
+        'preferences', p_preferences IS NOT NULL
+      )
+    )
+  );
+  
+  RETURN jsonb_build_object(
+    'success', true,
+    'profile_id', p_profile_id,
+    'message', 'Profile updated successfully'
+  );
+END;
+$$;
+
+-- ===============================================
+-- ACTUALIZAR get_appointment_details
+-- ===============================================
+DROP FUNCTION IF EXISTS public.get_appointment_details(uuid) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.get_appointment_details(
+  p_appointment_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+  v_role text;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  IF v_business_id IS NULL THEN
+    RAISE EXCEPTION 'Business context not found';
+  END IF;
+  
+  SELECT jsonb_build_object(
+    'appointment_id', a.id,
+    'start_time', a.start_time,
+    'end_time', a.end_time,
+    'status', a.status,
+    'total_price', COALESCE(a.metadata->>'total_price', s.base_price::text)::numeric,
+    'service', jsonb_build_object(
+      'id', s.id,
+      'name', s.name,
+      'description', s.description,
+      'duration_minutes', s.duration_minutes
+    ),
+    'client', jsonb_build_object(
+      'id', p.id,
+      'name', p.name,  -- ✅ CORREGIDO: full_name → name
+      'phone', p.phone_number
+    ),
+    'metadata', a.metadata,
+    'created_at', a.created_at
+  )
+  INTO v_result
+  FROM public.appointments a
+  JOIN public.services s ON s.id = a.service_id
+  JOIN public.profiles p ON p.id = a.profile_id
+  WHERE a.id = p_appointment_id
+    AND a.business_id = v_business_id;
+  
+  IF v_result IS NULL THEN
+    RAISE EXCEPTION 'Appointment not found';
+  END IF;
+  
+  RETURN v_result;
+END;
+$$;
+
+-- ===============================================
+-- ACTUALIZAR search_clients
+-- ===============================================
+DROP FUNCTION IF EXISTS public.search_clients(text) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.search_clients(
+  p_search_query text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_role text;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  IF v_role != 'owner' THEN
+    RAISE EXCEPTION 'Only owners can search clients';
+  END IF;
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'profile_id', p.id,
+      'name', p.name,  -- ✅ CORREGIDO: full_name → name
+      'phone_number', p.phone_number,
+      'email', p.email,
+      'role', p.role
+    )
+  )
+  INTO v_result
+  FROM public.profiles p
+  WHERE p.business_id = v_business_id
+    AND p.deleted_at IS NULL
+    AND (
+      lower(p.name) LIKE '%' || lower(p_search_query) || '%'
+      OR p.phone_number LIKE '%' || p_search_query || '%'
+      OR lower(p.email) LIKE '%' || lower(p_search_query) || '%'
+    )
+  LIMIT 50;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- ===============================================
+-- ACTUALIZAR list_all_clients
+-- ===============================================
+DROP FUNCTION IF EXISTS public.list_all_clients(text, boolean) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.list_all_clients(
+  p_role_filter text DEFAULT NULL,
+  p_include_inactive boolean DEFAULT false
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_role text;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  v_role := auth.jwt()->>'user_role';
+  
+  IF v_role != 'owner' THEN
+    RAISE EXCEPTION 'Only owners can list all clients';
+  END IF;
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'profile_id', p.id,
+      'name', p.name,  -- ✅ CORREGIDO: full_name → name
+      'phone_number', p.phone_number,
+      'email', p.email,
+      'role', p.role,
+      'created_at', p.created_at
+    ) ORDER BY p.created_at DESC
+  )
+  INTO v_result
+  FROM public.profiles p
+  WHERE p.business_id = v_business_id
+    AND (p_role_filter IS NULL OR p.role::text = p_role_filter)
+    AND (p_include_inactive OR p.deleted_at IS NULL);
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- ===============================================
+-- ACTUALIZAR get_top_clients
+-- ===============================================
+DROP FUNCTION IF EXISTS public.get_top_clients(int) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.get_top_clients(
+  p_limit int DEFAULT 10
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'profile_id', p.id,
+      'name', p.name,  -- ✅ CORREGIDO: full_name → name
+      'phone', p.phone_number,
+      'total_appointments', appointment_count,
+      'total_spent', total_spent
+    )
+  )
+  INTO v_result
+  FROM (
+    SELECT 
+      p.id,
+      p.name,
+      p.phone_number,
+      COUNT(a.id) as appointment_count,
+      COALESCE(SUM((a.metadata->>'total_price')::numeric), 0) as total_spent
+    FROM public.profiles p
+    LEFT JOIN public.appointments a ON a.profile_id = p.id 
+      AND a.status = 'completed'
+    WHERE p.business_id = v_business_id
+      AND p.deleted_at IS NULL
+    GROUP BY p.id
+    ORDER BY total_spent DESC
+    LIMIT p_limit
+  ) p;
+  
+  RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+-- ===============================================
+-- ACTUALIZAR get_next_waitlist_client
+-- ===============================================
+DROP FUNCTION IF EXISTS public.get_next_waitlist_client(uuid) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.get_next_waitlist_client(
+  p_service_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_business_id uuid;
+  v_result jsonb;
+BEGIN
+  v_business_id := public.get_user_business_id();
+  
+  SELECT jsonb_build_object(
+    'waitlist_id', w.id,
+    'profile_id', w.profile_id,
+    'client_name', p.name,  -- ✅ CORREGIDO: full_name → name
+    'client_phone', p.phone_number,
+    'priority', COALESCE(w.metadata->>'priority', '0')::int,
+    'created_at', w.created_at
+  )
+  INTO v_result
+  FROM public.waitlists w
+  JOIN public.profiles p ON p.id = w.profile_id
+  WHERE w.business_id = v_business_id
+    AND w.service_id = p_service_id
+    AND w.status = 'active'
+  ORDER BY 
+    COALESCE((w.metadata->>'priority')::int, 0) DESC,
+    w.created_at ASC
+  LIMIT 1;
+  
+  RETURN COALESCE(v_result, 'null'::jsonb);
+END;
+$$;
+
+-- ===============================================
+-- GRANTS
+-- ===============================================
+GRANT EXECUTE ON FUNCTION public.get_client_profile(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_client_profile(uuid, text, text, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_appointment_details(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.search_clients(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.list_all_clients(text, boolean) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_top_clients(int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_next_waitlist_client(uuid) TO authenticated;
+
+COMMIT;
+
+-- ===================================================
+-- VERIFICACIÓN
+-- ===================================================
+DO $$
+BEGIN
+  RAISE NOTICE '';
+  RAISE NOTICE '✅ PARCHE APLICADO: full_name → name';
+  RAISE NOTICE '📦 Funciones corregidas: 7';
+  RAISE NOTICE '';
+END $$;
