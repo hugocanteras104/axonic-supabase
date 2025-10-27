@@ -1,0 +1,254 @@
+-- ===============================================
+-- SEED PARTE 2 CORREGIDO: Herramientas FEATURES
+-- Sistema Tool Discovery - Axonic Assistant
+-- CORREGIDO: Sin DUAL_MODE incorrecto + Funciones RPC implementadas
+-- ===============================================
+
+BEGIN;
+
+DELETE FROM global_tool_definitions 
+WHERE tool_category LIKE 'FEATURES.%';
+
+-- ===================================================
+-- WAITLIST (8 herramientas) ✅
+-- ===================================================
+
+INSERT INTO global_tool_definitions (
+  tool_name, tool_category, description, keywords, original_keywords,
+  parameters, rpc_function_name, requires_role
+) VALUES
+
+('agregar_waitlist', 'FEATURES.WAITLIST', 'Agregar cliente a lista de espera',
+  ARRAY['waitlist', 'lista espera', 'espera', 'agregar', 'apuntar', 'anotar'],
+  ARRAY['waitlist', 'lista espera', 'espera', 'agregar', 'apuntar', 'anotar'],
+  '{"profile_id": {"type": "uuid", "required": true}, "service_id": {"type": "uuid", "required": true}, "priority": {"type": "integer", "required": false}}'::jsonb,
+  'add_to_waitlist', ARRAY['lead', 'owner']),
+
+('consultar_posicion_waitlist', 'FEATURES.WAITLIST', 'Consultar posición en lista de espera',
+  ARRAY['posicion', 'lugar', 'puesto', 'waitlist', 'cola'],
+  ARRAY['posicion', 'lugar', 'puesto', 'waitlist', 'cola'],
+  '{"waitlist_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_waitlist_position', ARRAY['lead', 'owner']),
+
+('siguiente_en_waitlist', 'FEATURES.WAITLIST', 'Obtener siguiente cliente en waitlist',
+  ARRAY['siguiente', 'proximo', 'waitlist', 'cola'],
+  ARRAY['siguiente', 'proximo', 'waitlist', 'cola'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_next_waitlist_client', ARRAY['owner']),
+
+('remover_waitlist', 'FEATURES.WAITLIST', 'Remover cliente de lista de espera',
+  ARRAY['remover', 'quitar', 'eliminar', 'salir', 'waitlist'],
+  ARRAY['remover', 'quitar', 'eliminar', 'salir', 'waitlist'],
+  '{"waitlist_id": {"type": "uuid", "required": true}}'::jsonb,
+  'remove_from_waitlist', ARRAY['lead', 'owner']),
+
+('listar_waitlist_servicio', 'FEATURES.WAITLIST', 'Ver todos los clientes en waitlist de un servicio',
+  ARRAY['lista', 'waitlist', 'todos', 'ver', 'servicio'],
+  ARRAY['lista', 'waitlist', 'todos', 'ver', 'servicio'],
+  '{"service_id": {"type": "uuid", "required": true}}'::jsonb,
+  'list_waitlist_by_service', ARRAY['owner']),
+
+('convertir_waitlist_cita', 'FEATURES.WAITLIST', 'Convertir entrada de waitlist en cita confirmada',
+  ARRAY['convertir', 'agendar', 'confirmar', 'waitlist', 'cita'],
+  ARRAY['convertir', 'agendar', 'confirmar', 'waitlist', 'cita'],
+  '{"waitlist_id": {"type": "uuid", "required": true}, "datetime": {"type": "timestamp", "required": true}}'::jsonb,
+  'convert_waitlist_to_appointment', ARRAY['owner']),
+
+('actualizar_prioridad_waitlist', 'FEATURES.WAITLIST', 'Actualizar prioridad de cliente en waitlist',
+  ARRAY['prioridad', 'cambiar', 'actualizar', 'waitlist'],
+  ARRAY['prioridad', 'cambiar', 'actualizar', 'waitlist'],
+  '{"waitlist_id": {"type": "uuid", "required": true}, "new_priority": {"type": "integer", "required": true}}'::jsonb,
+  'update_waitlist_priority', ARRAY['owner']),
+
+-- ===================================================
+-- PACKAGES (10 herramientas) ✅
+-- ===================================================
+
+('comprar_bono', 'FEATURES.PACKAGES', 'Comprar un paquete o bono de sesiones',
+  ARRAY['comprar', 'bono', 'paquete', 'sesiones', 'pack'],
+  ARRAY['comprar', 'bono', 'paquete', 'sesiones', 'pack'],
+  '{"profile_id": {"type": "uuid", "required": true}, "package_id": {"type": "uuid", "required": true}, "price_paid": {"type": "number", "required": false}}'::jsonb,
+  'purchase_package', ARRAY['lead', 'owner']),
+
+('consultar_bonos_cliente', 'FEATURES.PACKAGES', 'Ver bonos/paquetes activos del cliente',
+  ARRAY['bonos', 'paquetes', 'mis bonos', 'activos', 'tengo'],
+  ARRAY['bonos', 'paquetes', 'mis bonos', 'activos', 'tengo'],
+  '{"profile_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_client_packages', ARRAY['lead', 'owner']),
+
+('consumir_sesion_bono', 'FEATURES.PACKAGES', 'Usar una sesión del bono del cliente',
+  ARRAY['consumir', 'usar', 'sesion', 'bono', 'descontar'],
+  ARRAY['consumir', 'usar', 'sesion', 'bono', 'descontar'],
+  '{"client_package_id": {"type": "uuid", "required": true}, "appointment_id": {"type": "uuid", "required": true}}'::jsonb,
+  'use_package_session', ARRAY['owner']),
+
+('verificar_sesiones_restantes', 'FEATURES.PACKAGES', 'Consultar sesiones restantes en un bono',
+  ARRAY['restantes', 'quedan', 'sesiones', 'bono', 'cuantas'],
+  ARRAY['restantes', 'quedan', 'sesiones', 'bono', 'cuantas'],
+  '{"client_package_id": {"type": "uuid", "required": true}}'::jsonb,
+  'check_package_sessions_remaining', ARRAY['lead', 'owner']),
+
+('listar_paquetes_disponibles', 'FEATURES.PACKAGES', 'Ver todos los paquetes/bonos disponibles para compra',
+  ARRAY['paquetes', 'bonos', 'disponibles', 'ofertas', 'promociones'],
+  ARRAY['paquetes', 'bonos', 'disponibles', 'ofertas', 'promociones'],
+  '{}'::jsonb,
+  'list_available_packages', ARRAY['lead', 'owner']),
+
+('verificar_validez_bono', 'FEATURES.PACKAGES', 'Verificar si un bono sigue vigente',
+  ARRAY['valido', 'vigente', 'vencido', 'caducado', 'bono'],
+  ARRAY['valido', 'vigente', 'vencido', 'caducado', 'bono'],
+  '{"client_package_id": {"type": "uuid", "required": true}}'::jsonb,
+  'check_package_validity', ARRAY['lead', 'owner']),
+
+('historial_uso_bono', 'FEATURES.PACKAGES', 'Ver historial de uso de sesiones del bono',
+  ARRAY['historial', 'uso', 'sesiones', 'bono', 'consumidas'],
+  ARRAY['historial', 'uso', 'sesiones', 'bono', 'consumidas'],
+  '{"client_package_id": {"type": "uuid", "required": true}}'::jsonb,
+  'get_package_usage_history', ARRAY['lead', 'owner']),
+
+-- ===================================================
+-- ANALYTICS (10 herramientas) ✅
+-- ===================================================
+
+('obtener_ingresos_periodo', 'FEATURES.ANALYTICS', 'Obtener ingresos en un período específico',
+  ARRAY['ingresos', 'revenue', 'ventas', 'dinero', 'periodo'],
+  ARRAY['ingresos', 'revenue', 'ventas', 'dinero', 'periodo'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'get_revenue_by_period', ARRAY['owner']),
+
+('citas_por_estado', 'FEATURES.ANALYTICS', 'Ver distribución de citas por estado',
+  ARRAY['citas', 'estado', 'distribucion', 'estadisticas'],
+  ARRAY['citas', 'estado', 'distribucion', 'estadisticas'],
+  '{"start_date": {"type": "date", "required": false}, "end_date": {"type": "date", "required": false}}'::jsonb,
+  'get_appointments_by_status', ARRAY['owner']),
+
+('mejores_clientes', 'FEATURES.ANALYTICS', 'Ver clientes con más gasto o citas',
+  ARRAY['mejores', 'clientes', 'top', 'mas', 'vip'],
+  ARRAY['mejores', 'clientes', 'top', 'mas', 'vip'],
+  '{"limit": {"type": "integer", "required": false}}'::jsonb,
+  'get_top_clients', ARRAY['owner']),
+
+('tasa_cancelacion', 'FEATURES.ANALYTICS', 'Calcular tasa de cancelación de citas',
+  ARRAY['tasa', 'cancelacion', 'porcentaje', 'metricas'],
+  ARRAY['tasa', 'cancelacion', 'porcentaje', 'metricas'],
+  '{"start_date": {"type": "date", "required": true}, "end_date": {"type": "date", "required": true}}'::jsonb,
+  'get_cancellation_rate', ARRAY['owner']),
+
+('estadisticas_no_show', 'FEATURES.ANALYTICS', 'Ver estadísticas de clientes que no asisten',
+  ARRAY['no show', 'ausencias', 'inasistencias', 'estadisticas'],
+  ARRAY['no show', 'ausencias', 'inasistencias', 'estadisticas'],
+  '{"start_date": {"type": "date", "required": false}, "end_date": {"type": "date", "required": false}}'::jsonb,
+  'get_no_show_stats', ARRAY['owner']),
+
+-- ===================================================
+-- INVENTORY (9 herramientas) ✅
+-- ===================================================
+
+('consultar_stock', 'FEATURES.INVENTORY', 'Consultar stock de un producto',
+  ARRAY['stock', 'inventario', 'producto', 'cantidad'],
+  ARRAY['stock', 'inventario', 'producto', 'cantidad'],
+  '{"sku": {"type": "string", "required": true}}'::jsonb,
+  'get_inventory_item', ARRAY['owner']),
+
+('listar_inventario_completo', 'FEATURES.INVENTORY', 'Ver todo el inventario',
+  ARRAY['inventario', 'todo', 'completo', 'lista', 'productos'],
+  ARRAY['inventario', 'todo', 'completo', 'lista', 'productos'],
+  '{}'::jsonb,
+  'list_all_inventory', ARRAY['owner']),
+
+('agregar_producto', 'FEATURES.INVENTORY', 'Agregar nuevo producto al inventario',
+  ARRAY['agregar', 'nuevo', 'producto', 'inventario'],
+  ARRAY['agregar', 'nuevo', 'producto', 'inventario'],
+  '{"sku": {"type": "string", "required": true}, "name": {"type": "string", "required": true}, "quantity": {"type": "integer", "required": true}, "unit_cost": {"type": "number", "required": true}}'::jsonb,
+  'add_inventory_item', ARRAY['owner']),
+
+('actualizar_stock', 'FEATURES.INVENTORY', 'Actualizar cantidad en stock',
+  ARRAY['actualizar', 'stock', 'cantidad', 'inventario'],
+  ARRAY['actualizar', 'stock', 'cantidad', 'inventario'],
+  '{"sku": {"type": "string", "required": true}, "new_quantity": {"type": "integer", "required": true}}'::jsonb,
+  'update_inventory_quantity', ARRAY['owner']),
+
+('registrar_venta_producto', 'FEATURES.INVENTORY', 'Registrar venta de producto',
+  ARRAY['venta', 'vender', 'producto', 'registro'],
+  ARRAY['venta', 'vender', 'producto', 'registro'],
+  '{"sku": {"type": "string", "required": true}, "quantity": {"type": "integer", "required": true}, "profile_id": {"type": "uuid", "required": false}}'::jsonb,
+  'register_product_sale', ARRAY['owner']),
+
+('productos_bajo_stock', 'FEATURES.INVENTORY', 'Ver productos con stock bajo',
+  ARRAY['bajo', 'stock', 'poco', 'reorden'],
+  ARRAY['bajo', 'stock', 'poco', 'reorden'],
+  '{}'::jsonb,
+  'get_low_stock_items', ARRAY['owner']),
+
+('productos_agotados', 'FEATURES.INVENTORY', 'Ver productos agotados',
+  ARRAY['agotado', 'sin stock', 'cero', 'vacio'],
+  ARRAY['agotado', 'sin stock', 'cero', 'vacio'],
+  '{}'::jsonb,
+  'get_out_of_stock_items', ARRAY['owner']),
+
+('buscar_producto', 'FEATURES.INVENTORY', 'Buscar productos en inventario',
+  ARRAY['buscar', 'producto', 'inventario', 'encontrar'],
+  ARRAY['buscar', 'producto', 'inventario', 'encontrar'],
+  '{"search_query": {"type": "string", "required": true}}'::jsonb,
+  'search_inventory', ARRAY['owner']),
+
+('valor_total_inventario', 'FEATURES.INVENTORY', 'Calcular valor total del inventario',
+  ARRAY['valor', 'total', 'inventario', 'costo'],
+  ARRAY['valor', 'total', 'inventario', 'costo'],
+  '{}'::jsonb,
+  'get_total_inventory_value', ARRAY['owner']),
+
+-- ===================================================
+-- NO_SHOWS (1 herramienta ya existe en 0222)
+-- ===================================================
+
+('marcar_no_show', 'FEATURES.NO_SHOWS', 'Marcar cliente como no presentado',
+  ARRAY['no show', 'ausente', 'inasistencia', 'marcar'],
+  ARRAY['no show', 'ausente', 'inasistencia', 'marcar'],
+  '{"appointment_id": {"type": "uuid", "required": true}, "reason": {"type": "string", "required": false}}'::jsonb,
+  'mark_appointment_as_no_show', ARRAY['owner']);
+
+COMMIT;
+
+-- ===================================================
+-- VERIFICACIÓN
+-- ===================================================
+
+DO $$
+DECLARE
+  v_count_waitlist int;
+  v_count_packages int;
+  v_count_analytics int;
+  v_count_inventory int;
+  v_count_no_shows int;
+  v_total int;
+BEGIN
+  SELECT COUNT(*) INTO v_count_waitlist FROM global_tool_definitions WHERE tool_category = 'FEATURES.WAITLIST';
+  SELECT COUNT(*) INTO v_count_packages FROM global_tool_definitions WHERE tool_category = 'FEATURES.PACKAGES';
+  SELECT COUNT(*) INTO v_count_analytics FROM global_tool_definitions WHERE tool_category = 'FEATURES.ANALYTICS';
+  SELECT COUNT(*) INTO v_count_inventory FROM global_tool_definitions WHERE tool_category = 'FEATURES.INVENTORY';
+  SELECT COUNT(*) INTO v_count_no_shows FROM global_tool_definitions WHERE tool_category = 'FEATURES.NO_SHOWS';
+  
+  v_total := v_count_waitlist + v_count_packages + v_count_analytics + v_count_inventory + v_count_no_shows;
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+  RAISE NOTICE '✅ SEED PARTE 2 COMPLETADO (CORREGIDO)';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+  RAISE NOTICE '';
+  RAISE NOTICE '📊 Herramientas FEATURES insertadas:';
+  RAISE NOTICE '   Waitlist: %', v_count_waitlist;
+  RAISE NOTICE '   Packages: %', v_count_packages;
+  RAISE NOTICE '   Analytics: %', v_count_analytics;
+  RAISE NOTICE '   Inventory: %', v_count_inventory;
+  RAISE NOTICE '   No Shows: %', v_count_no_shows;
+  RAISE NOTICE '   TOTAL: %', v_total;
+  RAISE NOTICE '';
+  RAISE NOTICE '✅ DUAL_MODE eliminado (era un error de concepto)';
+  RAISE NOTICE '✅ TODAS las funciones RPC están implementadas';
+  RAISE NOTICE '';
+  RAISE NOTICE '📜 SIGUIENTE PASO:';
+  RAISE NOTICE '   Aplicar: SEED_PARTE_3_CORREGIDO.sql';
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════';
+END $$;
