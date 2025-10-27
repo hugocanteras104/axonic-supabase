@@ -1,0 +1,91 @@
+-- ===============================================
+-- PARCHE 2: Añadir columnas metadata y total_price
+-- Aplica DESPUÉS del PARCHE 1 (full_name → name)
+-- ===============================================
+
+BEGIN;
+
+-- ===============================================
+-- 1. Añadir columna metadata si no existe
+-- ===============================================
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'appointments' 
+    AND column_name = 'metadata'
+  ) THEN
+    ALTER TABLE public.appointments 
+    ADD COLUMN metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+    
+    RAISE NOTICE '✅ Columna metadata añadida a appointments';
+  ELSE
+    RAISE NOTICE '⚠️  Columna metadata ya existe en appointments';
+  END IF;
+END $$;
+
+COMMENT ON COLUMN public.appointments.metadata IS
+  'Datos adicionales: confirmación, información del pago, notas, etc.';
+
+-- ===============================================
+-- 2. Añadir columna total_price si no existe
+-- ===============================================
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'appointments' 
+    AND column_name = 'total_price'
+  ) THEN
+    ALTER TABLE public.appointments 
+    ADD COLUMN total_price numeric(10,2);
+    
+    RAISE NOTICE '✅ Columna total_price añadida a appointments';
+  ELSE
+    RAISE NOTICE '⚠️  Columna total_price ya existe en appointments';
+  END IF;
+END $$;
+
+COMMENT ON COLUMN public.appointments.total_price IS
+  'Precio total de la cita (puede diferir de base_price por descuentos/paquetes)';
+
+-- ===============================================
+-- 3. Índice para búsquedas por metadata
+-- ===============================================
+CREATE INDEX IF NOT EXISTS idx_appointments_metadata 
+  ON public.appointments USING gin(metadata);
+
+COMMIT;
+
+-- ===================================================
+-- VERIFICACIÓN
+-- ===================================================
+DO $$
+DECLARE
+  v_has_metadata boolean;
+  v_has_total_price boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'appointments' AND column_name = 'metadata'
+  ) INTO v_has_metadata;
+  
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'appointments' AND column_name = 'total_price'
+  ) INTO v_has_total_price;
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '════════════════════════════════════════';
+  RAISE NOTICE '✅ PARCHE 2 APLICADO';
+  RAISE NOTICE '════════════════════════════════════════';
+  RAISE NOTICE 'Columna metadata:     %', CASE WHEN v_has_metadata THEN '✅' ELSE '❌' END;
+  RAISE NOTICE 'Columna total_price:  %', CASE WHEN v_has_total_price THEN '✅' ELSE '❌' END;
+  RAISE NOTICE '';
+  
+  IF v_has_metadata AND v_has_total_price THEN
+    RAISE NOTICE '🎉 Tabla appointments lista para usar';
+  ELSE
+    RAISE EXCEPTION 'Error: No se pudieron crear las columnas';
+  END IF;
+END $$;
